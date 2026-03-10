@@ -82,10 +82,11 @@ function createAndFormatImageTensor(image) {
  * 2. Libera o tensor de entrada da memória (tf.dispose), pois já foi consumido pelo modelo
  *    e não será mais usado. Isso evita vazamento de memória na GPU/RAM.
  *
- * 3. Extrai os 3 primeiros tensores da saída do modelo:
- *    - boxes:   coordenadas das caixas delimitadoras (bounding boxes) [x1, y1, x2, y2]
- *    - scores:  confiança (0 a 1) de cada detecção
- *    - classes: índice numérico da classe detectada (ex: 0 = jogador, 1 = obstáculo)
+ * 3. Extrai os 4 tensores da saída do modelo:
+ *    - boxes:           coordenadas das caixas delimitadoras (bounding boxes) [x1, y1, x2, y2]
+ *    - scores:          confiança (0 a 1) de cada detecção
+ *    - classes:         índice numérico da classe detectada (ex: 0 = jogador, 1 = obstáculo)
+ *    - validDetections: quantidade de detecções válidas (evita iterar sobre slots vazios)
  *
  * 4. Converte os tensores em arrays JavaScript puros (.data()) usando Promise.all
  *    para fazer as 3 conversões em paralelo (mais rápido).
@@ -95,7 +96,7 @@ function createAndFormatImageTensor(image) {
  * 6. Retorna um objeto com os dados já em arrays JavaScript prontos para uso.
  *
  * @param {tf.Tensor} tensor — Tensor [1, 640, 640, 3] vindo de createAndFormatImageTensor()
- * @returns {{ boxes: Float32Array, scores: Float32Array, classes: Float32Array }}
+ * @returns {{ boxes: Float32Array, scores: Float32Array, classes: Float32Array, numDetections: number }}
  */
 async function runYoloModelOverTensorAndGetDetections(tensor) {
     // 1. Roda o modelo sobre o tensor — retorna array de tensores com as previsões
@@ -104,14 +105,15 @@ async function runYoloModelOverTensorAndGetDetections(tensor) {
     // 2. Libera o tensor de entrada da memória (já foi usado)
     tf.dispose(tensor)
 
-    // 3. Pega os 3 primeiros tensores: caixas, pontuações e classes
-    const [boxes, scores, classes] = output.slice(0, 3)
+    // 3. Pega os 4 tensores: caixas, pontuações, classes e quantidade de detecções válidas
+    const [boxes, scores, classes, validDetections] = output.slice(0, 4)
 
     // 4. Converte tensores GPU → arrays JavaScript (em paralelo)
-    const [boxesData, scoresData, classesData] = await Promise.all([
+    const [boxesData, scoresData, classesData, validData] = await Promise.all([
         boxes.data(),
         scores.data(),
         classes.data(),
+        validDetections.data(),
     ])
 
     // 5. Libera todos os tensores de saída da memória
@@ -119,9 +121,10 @@ async function runYoloModelOverTensorAndGetDetections(tensor) {
 
     // 6. Retorna os dados como arrays JavaScript puros
     return {
-        boxes: boxesData,       // Coordenadas das bounding boxes
-        scores: scoresData,     // Confiança de cada detecção (0 a 1)
-        classes: classesData    // Índice da classe detectada
+        boxes: boxesData,              // Coordenadas das bounding boxes
+        scores: scoresData,            // Confiança de cada detecção (0 a 1)
+        classes: classesData,          // Índice da classe detectada
+        numDetections: validData[0]    // Quantidade de detecções válidas no batch
     }
 }
 
@@ -135,25 +138,28 @@ async function runYoloModelOverTensorAndGetDetections(tensor) {
  * Uso de generator (function*):
  * - Permite enviar cada predição assim que processada, sem criar lista intermediária
  */
-function* processPrediction({ boxes, scores, classes }, width, height) {
-    for (let index = 0; index < scores.length; index++) {
+function* processPrediction({ boxes, scores, classes, numDetections }, width, height) {
+    const limit = numDetections ?? scores.length // usa numDetections se disponível
+    for (let index = 0; index < limit; index++) {
         if (scores[index] < CLASS_THRESHOLD) continue
 
 
-        //No nosso desenho, identificou os obstaculos como "Stop Sign" e os obstaculos como "surfboard" ou "frisbee"
-        //E a nave (player) como kite ou airplane
+        //No nosso desenho, identificou os obstaculos como "stop sign" ou "clock"
+        //E a nave (player) como "kite" ou "airplane"
         const label = _labels[classes[index]]
         console.log(`[Worker] Detecção: ${label} (confiança: ${scores[index].toFixed(2)})`)
 
-        //if (!['frisbee', 'stop sign', 'kite'].includes(label.toLowerCase())) continue; 
+        if (!['airplane', 'clock', 'stop sign', 'kite'].includes(label.toLowerCase())) continue; 
 
+        //Se vc abrir o array de boxes, vc vai perceber que todos os outros elementos nas posições diferentes do numDetections são lixo e devem ser ignorados. Por isso o limit = numDetections
         let [x1, y1, x2, y2] = boxes.slice(index * 4, (index + 1) * 4) //cada box tem 4 dimensões
+
+        //Normalizando os valores retornados pelo modelo (0 a 1) para as dimensões reais do canvas
         x1 *= width
         x2 *= width
         y1 *= height
         y2 *= height
 
-        
         const centerX = (x1 + x2) / 2
         const centerY = (y1 + y2) / 2
 
@@ -199,19 +205,26 @@ self.onmessage = async (e) => {
       return
     }
 
-    const input = createAndFormatImageTensor(e.data.image);
-    const { width, height } = e.data.image;
-    const shape = input.shape // Salva o shape antes do dispose dentro de runYoloModelOverTensorAndGetDetections
+    const image = e.data.image
+    const { width, height } = image
+    const input = createAndFormatImageTensor(image)
 
-    const inferenceResults = await runYoloModelOverTensorAndGetDetections(input)
-    for (const prediction of processPrediction(inferenceResults, width, height)) {
-        postMessage({
-            type: 'prediction',
-            ...prediction
-        });
+    // Libera o ImageBitmap da memória nativa (não é coletado pelo GC automaticamente)
+    image.close()
+
+    try {
+      const inferenceResults = await runYoloModelOverTensorAndGetDetections(input)
+      for (const prediction of processPrediction(inferenceResults, width, height)) {
+          postMessage({
+              type: 'prediction',
+              ...prediction
+          });
+      }
+    } catch (err) {
+      // Se a inferência falhar, garante que o tensor de entrada seja liberado
+      tf.dispose(input)
+      console.error('[Worker] Erro na predição:', err)
     }
-
-    //console.log('[Worker] Predição concluída. Shape:', shape, 'Resultados:', inferenceResults)
   }  
 
   if (type === 'gameState') {
