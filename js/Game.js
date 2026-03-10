@@ -71,7 +71,6 @@ export default class Game {
     // Escuta mensagens vindas do Worker
     this.worker.onmessage = (e) => {
       const { type } = e.data
-
       if (type === 'ready') {
         console.log('[Game] Worker pronto')
       }
@@ -83,8 +82,9 @@ export default class Game {
       }
 
       if (type === 'predictionResult') {
+        //Inicio desenho na tela — Armazena predictions para desenhar na tela
         this.predictions.push({
-          label: e.data.label,
+         label: e.data.label,
           confidence: e.data.confidence,
           bbox: e.data.bbox,
           timestamp: performance.now()
@@ -92,8 +92,10 @@ export default class Game {
         // Remove predições antigas (> 500ms) para não acumular
         const now = performance.now()
         this.predictions = this.predictions.filter(p => now - p.timestamp < 500)
-      }
+        //Fim desenho na tela
 
+        this.makeAirplaneMoveAwayObstacles(e.data);
+      }
     }
 
     // Envia snapshot do canvas ao Worker a cada 200ms
@@ -103,7 +105,6 @@ export default class Game {
       // Captura o canvas como ImageBitmap e envia ao Worker
       const bitmap = await createImageBitmap(this.canvas)
       this.worker.postMessage({ type: 'predict', image: bitmap }, [bitmap])
-
     }, 200)
   }
 
@@ -208,7 +209,6 @@ export default class Game {
   }
 
   drawPredictions() {
-
     for (const pred of this.predictions) {
       const [x1, y1, x2, y2] = pred.bbox
       this.ctx.strokeStyle = "red"
@@ -318,4 +318,71 @@ export default class Game {
     }, { once: true })       // { once: true } remove o listener após o primeiro uso
   }
 
+  //Esse metodo pega os resultados das predições e move o airplane evitando colidir com os obstaculos
+  makeAirplaneMoveAwayObstacles(prediction) {
+    const label = prediction.label
+    const x = prediction.bbox[0];
+    const y = prediction.bbox[1];
+    console.log(`🎯 AI predicted ${label} at: (${x}, ${y}) with confidence of ${prediction.confidence.toFixed(2)}`);
+
+    if (label === 'airplane') {
+      // Coleta os Y de todos os obstáculos próximos ao avião
+      const nearObstacles = this.obstacles.filter(
+        o => Math.abs(o.x - x) < 200 && Math.abs(o.y - y) < 200
+      )
+      if (nearObstacles.length > 0) {
+        // Encontra o obstáculo mais próximo em Y para reagir a ele
+        const closest = nearObstacles.reduce((a, b) =>
+          Math.abs(a.y - this.player.y) < Math.abs(b.y - this.player.y) ? a : b
+        )
+        console.log(`⚠️ Obstáculo próximo! Evasão inteligente.`)
+        this.evadeObstacle(closest.y)
+      }
+    }
+
+    if (label === 'clock') {
+      if (Math.abs(this.player.x - x) < 200) {
+        console.log(`⚠️ Avião próximo do obstáculo! Evasão inteligente.`)
+        this.evadeObstacle(y)
+      }
+    }
+  }
+
+  // evadeObstacle — Move o avião para um Y confortável, longe do obstáculo
+  // Calcula o targetY que fica a safeDistance do obstáculo, escolhendo a direção
+  // com mais espaço disponível. Ajusta vy proporcionalmente à distância restante.
+  evadeObstacle(obstacleY) {
+    const safeDistance = 120           // Distância confortável em pixels
+    const minY = 20                   // Margem de segurança do topo
+    const maxY = 330                  // Margem de segurança do chão
+    const playerY = this.player.y
+
+    // Calcula quanto espaço livre tem acima e abaixo do obstáculo
+    const spaceAbove = obstacleY - minY
+    const spaceBelow = maxY - obstacleY
+
+    // Escolhe a direção com mais espaço para fugir
+    let targetY
+    if (spaceBelow > spaceAbove) {
+      // Mais espaço embaixo → alvo = abaixo do obstáculo + safeDistance
+      targetY = Math.min(obstacleY + safeDistance, maxY)
+    } else {
+      // Mais espaço em cima → alvo = acima do obstáculo - safeDistance
+      targetY = Math.max(obstacleY - safeDistance, minY)
+    }
+
+    // Calcula a diferença entre onde o player está e onde deveria estar
+    const diff = targetY - playerY   // positivo = precisa descer, negativo = precisa subir
+
+    // Se já está perto o suficiente do targetY, não faz nada
+    if (Math.abs(diff) < 30) return
+
+    // Aplica vy proporcional à distância, com clamping para não explodir
+    // Quanto mais longe do alvo, mais forte o impulso (entre -14 e 10)
+    const strength = Math.min(Math.abs(diff) / 10, diff > 0 ? 10 : 14)
+    this.player.vy = diff > 0 ? strength : -strength
+
+    const direction = diff > 0 ? '⬇️ descendo' : '⬆️ subindo'
+    console.log(`${direction} para Y=${targetY} (obst=${obstacleY}, player=${playerY}, vy=${this.player.vy.toFixed(1)})`)
+  }
 }

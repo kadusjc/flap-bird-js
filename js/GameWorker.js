@@ -71,7 +71,6 @@ function createAndFormatImageTensor(image) {
     });
 }
 
-
 /**
  * runYoloModelOverTensorAndGetDetections — Executa o modelo YOLOv5 sobre um tensor de imagem e retorna as detecções.
  *
