@@ -1,0 +1,1150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Flap Bird AI — Engineering Presentation</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/theme/black.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/plugin/highlight/monokai.css">
+  <style>
+    :root {
+      --r-heading-color: #58a6ff;
+      --r-link-color: #79c0ff;
+    }
+    .reveal h1, .reveal h2, .reveal h3 { text-transform: none !important; }
+    .reveal h1 { font-size: 2.2em; }
+    .reveal h2 { font-size: 1.6em; }
+    .reveal h3 { font-size: 1.2em; color: #8b949e; }
+    .reveal pre { font-size: 0.48em; margin: 6px 0; }
+    .reveal code { font-size: 0.88em; }
+    .reveal section { text-align: left; }
+    .reveal section { overflow: hidden; }
+    .reveal .center { text-align: center; }
+    .reveal ul { font-size: 0.78em; line-height: 1.4; margin: 4px 0; }
+    .reveal ol { font-size: 0.78em; line-height: 1.4; margin: 4px 0; }
+    .reveal p { font-size: 0.78em; line-height: 1.35; margin: 4px 0; }
+    .reveal h2 + p, .reveal h2 + pre, .reveal h2 + ul, .reveal h2 + ol { margin-top: 8px; }
+    .reveal .small { font-size: 0.65em; color: #8b949e; }
+    .reveal .highlight-box {
+      background: rgba(88,166,255,0.1);
+      border-left: 4px solid #58a6ff;
+      padding: 8px 16px;
+      margin: 10px 0;
+      border-radius: 4px;
+      font-size: 0.78em;
+    }
+    .reveal .warn-box {
+      background: rgba(255,166,87,0.1);
+      border-left: 4px solid #ffa657;
+      padding: 8px 16px;
+      margin: 10px 0;
+      border-radius: 4px;
+      font-size: 0.78em;
+    }
+    .reveal .green-box {
+      background: rgba(63,185,80,0.1);
+      border-left: 4px solid #3fb950;
+      padding: 8px 16px;
+      margin: 10px 0;
+      border-radius: 4px;
+      font-size: 0.78em;
+    }
+    .reveal table { font-size: 0.68em; margin: 10px auto; }
+    .reveal table th { background: rgba(88,166,255,0.15); color: #58a6ff; }
+    .reveal table td, .reveal table th { padding: 5px 12px; border: 1px solid #30363d; }
+    .two-col { display: flex; gap: 30px; align-items: flex-start; }
+    .two-col > div { flex: 1; }
+    .emoji { font-size: 1.4em; }
+    .architecture-diagram {
+      background: #0d1117;
+      border: 1px solid #30363d;
+      border-radius: 8px;
+      padding: 20px;
+      font-family: monospace;
+      font-size: 0.6em;
+      line-height: 1.8;
+      color: #c9d1d9;
+      text-align: center;
+    }
+    .pipeline-step {
+      display: inline-block;
+      background: rgba(88,166,255,0.15);
+      border: 1px solid #58a6ff;
+      border-radius: 6px;
+      padding: 4px 10px;
+      margin: 3px;
+      font-size: 0.7em;
+    }
+    .pipeline-arrow { color: #ffa657; font-size: 1.1em; margin: 0 2px; }
+  </style>
+</head>
+<body>
+<div class="reveal">
+<div class="slides">
+
+<!-- ============================================================ -->
+<!-- SLIDE 1 — Title -->
+<!-- ============================================================ -->
+<section class="center">
+  <h1>🐦 Flap Bird AI</h1>
+  <h3>Real-Time Object Detection in the Browser<br>with YOLOv5 + TensorFlow.js</h3>
+  <br>
+  <p class="small">Engineering Meeting — March 2026</p>
+</section>
+
+<!-- ============================================================ -->
+<!-- SLIDE 2 — Agenda -->
+<!-- ============================================================ -->
+<section class="center">
+  <h2>📋 Agenda</h2>
+  <ol>
+    <li>Project Overview &amp; Motivation</li>
+    <li>Architecture &amp; Technology Stack</li>
+    <li>Game Engine — Class by Class</li>
+    <li>AI Pipeline — YOLOv5 in the Browser</li>
+    <li>Web Workers — Multi-Threading in JS</li>
+    <li>Key Concepts &amp; Terminology</li>
+    <li>Live Demo &amp; Q&A</li>
+  </ol>
+</section>
+
+<!-- ============================================================ -->
+<!-- SLIDE 3 — Project Overview -->
+<!-- ============================================================ -->
+<section>
+  <h2>🎯 Project Overview</h2>
+  <p>A <strong>Flappy Bird-style game</strong> running entirely in the browser, enhanced with a
+     <strong>YOLOv5 neural network</strong> that performs real-time object detection on the game canvas.</p>
+  <div class="highlight-box">
+    <strong>Goal:</strong> Demonstrate how machine learning models can run client-side in a browser
+    using TensorFlow.js, with zero backend infrastructure.
+  </div>
+  <ul>
+    <li>Pure HTML5 Canvas + vanilla JavaScript (ES Modules)</li>
+    <li>AI runs in a <strong>Web Worker</strong> (separate thread)</li>
+    <li>Model: <strong>YOLOv5n</strong> (nano) — the smallest &amp; fastest YOLOv5 variant</li>
+    <li>No server, no API calls — everything runs on the user's device</li>
+  </ul>
+</section>
+
+<!-- ============================================================ -->
+<!-- SLIDE 4 — Architecture Diagram -->
+<!-- ============================================================ -->
+<section>
+  <h2>🏗️ Architecture</h2>
+  <div class="architecture-diagram">
+    <pre style="color:#c9d1d9; font-size:0.95em; line-height:1.6;">
+┌────────────────── MAIN THREAD ──────────────────────┐
+│  index.html ──▶ main.js ──▶ Game.js (orchestrator)  │
+│                               │                      │
+│          Player.js      Obstacle.js    LevelManager  │
+│               └───────┬───────┘           .js        │
+│                  Collision.js   Input.js (keyboard)  │
+│                                                      │
+│  ─ ─ ─ ─ ─ ─ ─ postMessage() ─ ─ ─ ─ ─ ─ ─ ─ ─ ─  │
+│  ┌────────────────────────────────────────────────┐  │
+│  │  WEB WORKER: GameWorker.js                     │  │
+│  │    ├── TensorFlow.js (TFJS)                    │  │
+│  │    ├── YOLOv5n Model  (model.json + weights)   │  │
+│  │    └── labels.json    (80 COCO classes)        │  │
+│  └────────────────────────────────────────────────┘  │
+└──────────────────────────────────────────────────────┘
+    </pre>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<!-- SLIDE 5 — Tech Stack -->
+<!-- ============================================================ -->
+<section>
+  <h2>🛠️ Technology Stack</h2>
+  <table>
+    <thead><tr><th>Technology</th><th>Role</th><th>Why?</th></tr></thead>
+    <tbody>
+      <tr><td><strong>HTML5 Canvas</strong></td><td>Rendering</td><td>Pixel-level 2D drawing API, no dependencies</td></tr>
+      <tr><td><strong>ES Modules</strong></td><td>Code structure</td><td>Native <code>import/export</code>, no bundler needed</td></tr>
+      <tr><td><strong>Web Workers</strong></td><td>Multi-threading</td><td>Keeps AI off the main thread → no jank</td></tr>
+      <tr><td><strong>TensorFlow.js</strong></td><td>ML runtime</td><td>GPU-accelerated inference via WebGL</td></tr>
+      <tr><td><strong>YOLOv5n</strong></td><td>Object detection</td><td>Fastest YOLO variant, suitable for real-time</td></tr>
+      <tr><td><strong>requestAnimationFrame</strong></td><td>Game loop</td><td>Synced to display refresh rate (~60 fps)</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ============================================================ -->
+<!-- SLIDE 6 — File Structure -->
+<!-- ============================================================ -->
+<section>
+  <h2>📁 Project Structure</h2>
+  <pre><code class="language-text">flap-bird-ia/
+├── index.html                  ← Entry point (canvas + module script)
+├── assets/
+│   ├── bg.png                  ← Background image
+│   ├── player.png              ← Bird sprite
+│   └── obstacle.png            ← Obstacle sprite
+├── js/
+│   ├── main.js                 ← Bootstraps the game loop
+│   ├── Game.js                 ← Orchestrator — ties everything together
+│   ├── Player.js               ← Bird physics & rendering
+│   ├── Obstacle.js             ← Obstacle spawning & movement
+│   ├── Collision.js            ← AABB collision detection
+│   ├── Input.js                ← Keyboard event handler
+│   ├── LevelManager.js         ← Difficulty progression (8 levels)
+│   └── GameWorker.js           ← Web Worker: loads & runs YOLOv5
+└── machine-learning/
+    └── yolov5n_web_model/
+        ├── model.json           ← Model architecture (graph definition)
+        ├── labels.json          ← 80 COCO class names
+        └── *.bin                ← Model weights (binary shards)
+</code></pre>
+</section>
+
+<!-- ============================================================ -->
+<!-- SLIDE 7 — Game Loop Concept -->
+<!-- ============================================================ -->
+<section>
+  <h2>🔄 The Game Loop</h2>
+  <p>The heartbeat of every real-time game. Runs ~60 times per second.</p>
+  <div class="two-col">
+    <div>
+      <pre><code class="language-javascript">// main.js
+function loop() {
+  game.update()   // Logic: physics, collisions
+  game.draw()     // Render: redraw everything
+  requestAnimationFrame(loop)  // Schedule next
+}
+loop()  // Start!</code></pre>
+    </div>
+    <div>
+      <div class="highlight-box">
+        <strong>requestAnimationFrame</strong><br>
+        Browser API that calls your function right before the next screen repaint.
+        Automatically pauses when the tab is hidden, saving CPU/GPU.
+      </div>
+      <p class="small">At 60 fps each frame is ~16.67 ms. All update + draw logic must finish within this budget.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<!-- SLIDE 8 — main.js -->
+<!-- ============================================================ -->
+<section>
+  <h2>📄 main.js — Entry Point</h2>
+  <pre><code class="language-javascript">import Game from "./Game.js"
+
+const canvas = document.getElementById("game")
+const ctx = canvas.getContext("2d")
+
+// Create Web Worker in a separate thread for AI/prediction
+const worker = new Worker("./js/GameWorker.js")
+
+const game = new Game(canvas, ctx, worker)
+
+function loop() {
+  game.update()
+  game.draw()
+  requestAnimationFrame(loop)
+}
+
+loop()</code></pre>
+  <div class="highlight-box">
+    <strong>Key point:</strong> The Worker is created here and passed into Game.
+    This separates concerns: main thread handles rendering, worker handles AI.
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<!-- SLIDE 9 — Game.js -->
+<!-- ============================================================ -->
+<section>
+  <h2>🎮 Game.js — The Orchestrator</h2>
+  <div class="two-col">
+    <div>
+      <h3>Responsibilities</h3>
+      <ul>
+        <li>Manages <strong>Player</strong>, <strong>Obstacles[]</strong>, <strong>LevelManager</strong></li>
+        <li>Spawns obstacles at intervals based on current level</li>
+        <li>Runs collision detection every frame</li>
+        <li>Draws all entities + HUD (score, level)</li>
+        <li>Sends canvas snapshots to the Worker every 200 ms</li>
+        <li>Handles game over &amp; restart</li>
+      </ul>
+    </div>
+    <div>
+      <h3>Constructor</h3>
+      <pre><code class="language-javascript">constructor(canvas, ctx, worker) {
+  this.canvas = canvas
+  this.ctx = ctx
+  this.worker = worker
+  this.bg = new Image()
+  this.bg.src = "./assets/bg.png"
+  this.player = new Player()
+  this.obstacles = []
+  this.frame = 0
+  this.score = 0
+  this.running = true
+  this.levelManager = new LevelManager()
+  new Input(this.player)
+  this.setupWorker()
+}</code></pre>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<!-- SLIDE 10 — Game.js update() -->
+<!-- ============================================================ -->
+<section>
+  <h2>🎮 Game.js — update()</h2>
+  <pre><code class="language-javascript">update() {
+  if (!this.running) return
+  this.frame++
+  this.player.update()                                      // Apply gravity
+  if (this.frame % this.levelManager.spawnRate() === 0) this.spawn()
+
+  for (let i = this.obstacles.length - 1; i >= 0; i--) {    // Backwards loop!
+    let o = this.obstacles[i]
+    o.update(this.levelManager.speed())
+    if (collide(this.player, o)) this.gameOver()
+    if (o.x + o.w < 0) {                                    // Off-screen
+      this.obstacles.splice(i, 1)
+      this.score++
+      this.levelManager.update(this.score)
+    }
+  }
+}</code></pre>
+  <div class="warn-box">
+    <strong>Why iterate backwards?</strong> <code>splice(i, 1)</code> shifts indices.
+    Iterating backwards (i--) prevents skipping elements.
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<!-- SLIDE 11 — Game.js draw() -->
+<!-- ============================================================ -->
+<section>
+  <h2>🎮 Game.js — draw()</h2>
+  <p>Redraws the entire scene every frame. <strong>Order matters</strong> — later draws appear on top.</p>
+  <pre><code class="language-javascript">draw() {
+  this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height) // 1. Clear
+  if (this.bg.complete)                                           // 2. Background
+    this.ctx.drawImage(this.bg, 0, 0, this.canvas.width, this.canvas.height)
+  this.player.draw(this.ctx)                     // 3. Player
+  for (let o of this.obstacles) o.draw(this.ctx)  // 4. Obstacles
+  this.ctx.fillStyle = "white"                   // 5. HUD
+  this.ctx.font = "20px Arial"
+  this.ctx.fillText("Score: " + this.score, 10, 25)
+  this.ctx.fillText("Level: " + this.levelManager.level, 10, 50)
+  if (!this.running) this.drawGameOver()          // 6. Game Over overlay
+}</code></pre>
+  <div class="highlight-box">
+    <strong>Canvas 2D</strong> is immediate-mode — nothing retained between frames. Redraw everything each time.
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<!-- SLIDE 12 — Game.js Worker Communication -->
+<!-- ============================================================ -->
+<section>
+  <h2>🎮 Game.js — Worker Communication</h2>
+  <pre><code class="language-javascript">setupWorker() {
+  this.worker.onmessage = (e) => {
+    if (e.data.type === 'ready')  console.log('[Game] Worker ready')
+    if (e.data.type === 'action' && e.data.action === 'jump') this.player.jump()
+  }
+  // Send canvas snapshot to Worker every 200ms
+  this.snapshotInterval = setInterval(async () => {
+    if (!this.running) return
+    const bitmap = await createImageBitmap(this.canvas)
+    this.worker.postMessage({ type: 'predict', image: bitmap }, [bitmap])
+    this.worker.postMessage({
+      type: 'gameState',
+      state: { player, obstacles, score, level }
+    })
+  }, 200)
+}</code></pre>
+  <div class="green-box">
+    <strong>Transferable Objects:</strong> The second argument <code>[bitmap]</code> transfers ownership
+    to the Worker — zero-copy, no serialization overhead.
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<!-- SLIDE 13a — Player.js Code -->
+<!-- ============================================================ -->
+<section>
+  <h2>🐤 Player.js — The Bird</h2>
+  <div class="two-col">
+    <div>
+      <pre><code class="language-javascript">class Player {
+  constructor() {
+    this.x = 80       // Fixed horizontal pos
+    this.y = 200      // Starting Y
+    this.w = 60; this.h = 40  // Size
+    this.vy = 0       // Vertical velocity
+    this.sprite = new Image()
+    this.sprite.src = "./assets/player.png"
+  }
+
+  jump() { this.vy = -10 }
+
+  update() {
+    this.vy += 0.5     // Gravity
+    this.y += this.vy   // Apply velocity
+    if (this.y < 0) this.y = 0
+    if (this.y > 350) { this.y = 350; this.vy = 0 }
+  }
+
+  draw(ctx) {
+    if (this.sprite.complete)
+      ctx.drawImage(this.sprite,
+        this.x, this.y, this.w, this.h)
+  }
+}</code></pre>
+    </div>
+    <div>
+      <h3>Physics Model</h3>
+      <div class="highlight-box">
+        <strong>Euler Integration</strong> (simplest physics):
+        <code>velocity += gravity</code> → acceleration;
+        <code>position += velocity</code> → movement.
+        Each frame, <code>vy</code> increases by 0.5 (gravity).
+        <code>jump()</code> sets <code>vy = -10</code> (upward).
+      </div>
+      <div class="warn-box">
+        <strong>Canvas coordinate system:</strong>
+        Y=0 is the <em>top</em>. Y increases downward.<br>
+        So <code>vy = -10</code> means "go up".
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<!-- SLIDE 14 — Obstacle.js -->
+<!-- ============================================================ -->
+<section>
+  <h2>🪨 Obstacle.js</h2>
+  <div class="two-col">
+    <div>
+      <pre><code class="language-javascript">class Obstacle {
+  constructor(canvas) {
+    this.w = 50
+    this.h = Math.random() * 120 + 60
+    //     → random height: 60–180px
+
+    this.x = canvas.width
+    //     → spawns at right edge
+
+    this.y = Math.random()
+            * (canvas.height - this.h)
+            - 30
+    //     → random vertical position
+
+    this.sprite = new Image()
+    this.sprite.src =
+      "./assets/obstacle.png"
+  }
+
+  update(speed) {
+    this.x -= speed  // Move left
+  }
+
+  draw(ctx) { /* drawImage(...) */ }
+}</code></pre>
+    </div>
+    <div>
+      <h3>Obstacle Lifecycle</h3>
+      <ol>
+        <li><strong>Spawn</strong> — Created at <code>x = canvas.width</code> (right edge)</li>
+        <li><strong>Move</strong> — Each frame: <code>x -= speed</code></li>
+        <li><strong>Collide?</strong> — Checked by <code>collide(player, obstacle)</code></li>
+        <li><strong>Off-screen</strong> — When <code>x + w &lt; 0</code> → removed, score++</li>
+      </ol>
+      <div class="highlight-box">
+        <strong>Design choice:</strong> Player stays at fixed X. Obstacles move left,
+        creating the illusion of forward movement (classic side-scroller).
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<!-- SLIDE 15 — Collision.js -->
+<!-- ============================================================ -->
+<section>
+  <h2>💥 Collision.js — AABB Detection</h2>
+  <div class="two-col">
+    <div>
+      <pre><code class="language-javascript">export default function collide(a, b) {
+  return (
+    a.x < b.x + b.w &&  // A left < B right
+    a.x + a.w > b.x &&  // A right > B left
+    a.y < b.y + b.h &&  // A top < B bottom
+    a.y + a.h > b.y     // A bottom > B top
+  )
+}</code></pre>
+      <div class="highlight-box">
+        If <strong>all four</strong> conditions are true → overlap → collision!
+      </div>
+    </div>
+    <div>
+      <h3>AABB — Axis-Aligned Bounding Box</h3>
+      <ul>
+        <li><strong>Axis-Aligned</strong> = edges parallel to X/Y axes</li>
+        <li><strong>Bounding Box</strong> = smallest enclosing rectangle</li>
+        <li><strong>O(1)</strong> — just 4 comparisons</li>
+        <li>Used in Unity, Unreal, Godot, and virtually every 2D engine</li>
+      </ul>
+      <p class="small">For rotated objects → OBB or SAT (Separating Axis Theorem).</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<!-- SLIDE 16 — Input.js -->
+<!-- ============================================================ -->
+<section>
+  <h2>⌨️ Input.js — Keyboard Handler</h2>
+  <pre><code class="language-javascript">export default class Input {
+  constructor(player) {
+    document.addEventListener("keydown", e => {
+      if (e.code === "Space") {
+        player.jump()
+      }
+    })
+  }
+}</code></pre>
+  <div class="two-col">
+    <div>
+      <div class="highlight-box">
+        <strong>Simple &amp; focused:</strong> A single class with a single responsibility —
+        listening for keyboard events and translating them into game actions.
+      </div>
+    </div>
+    <div>
+      <div class="green-box">
+        <strong>Design pattern:</strong> By passing  <code>player</code> into the constructor,
+        Input doesn't know about the Game. This decouples input handling from game logic
+        (a basic form of <strong>Dependency Injection</strong>).
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<!-- SLIDE 17 — LevelManager.js -->
+<!-- ============================================================ -->
+<section>
+  <h2>📈 LevelManager.js — Difficulty Progression</h2>
+  <div class="two-col">
+    <div>
+      <pre><code class="language-javascript">class LevelManager {
+  constructor() {
+    this.level = 1
+    this.levels = [
+      { speed: 3,   spawn: 120 }, // L1
+      { speed: 3.5, spawn: 110 }, // L2
+      { speed: 4,   spawn: 100 }, // L3
+      { speed: 4.5, spawn:  90 }, // L4
+      { speed: 5,   spawn:  80 }, // L5
+      { speed: 5.5, spawn:  70 }, // L6
+      { speed: 6,   spawn:  60 }, // L7
+      { speed: 7,   spawn:  50 }, // L8
+    ]
+  }
+  speed()     { return this.levels[this.level-1].speed }
+  spawnRate() { return this.levels[this.level-1].spawn }
+  update(score) {
+    if (score % 10 === 0 && this.level < 8)
+      this.level++
+  }
+}</code></pre>
+    </div>
+    <div>
+      <table>
+        <tr><th>Level</th><th>Speed</th><th>Spawn</th><th>≈ Interval</th></tr>
+        <tr><td>1</td><td>3 px/f</td><td>120 f</td><td>~2.0 s</td></tr>
+        <tr><td>4</td><td>4.5 px/f</td><td>90 f</td><td>~1.5 s</td></tr>
+        <tr><td>8</td><td>7 px/f</td><td>50 f</td><td>~0.8 s</td></tr>
+      </table>
+      <div class="warn-box">
+        Every <strong>10 points</strong> → level up.<br>
+        Higher level = faster obstacles + more frequent spawns.
+        This is a common <strong>difficulty curve</strong> pattern.
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<!-- SLIDE 18 — AI Pipeline Intro -->
+<!-- ============================================================ -->
+<section class="center">
+  <h2>🧠 AI Pipeline</h2>
+  <h3>Running YOLOv5 in the Browser</h3>
+  <div style="text-align:center; margin-top: 20px;">
+    <span class="pipeline-step">Canvas</span>
+    <span class="pipeline-arrow">→</span>
+    <span class="pipeline-step">Bitmap</span>
+    <span class="pipeline-arrow">→</span>
+    <span class="pipeline-step">postMessage</span>
+    <span class="pipeline-arrow">→</span>
+    <span class="pipeline-step">Worker</span>
+    <span class="pipeline-arrow">→</span>
+    <span class="pipeline-step">Tensor</span>
+    <span class="pipeline-arrow">→</span>
+    <span class="pipeline-step">YOLOv5n</span>
+    <span class="pipeline-arrow">→</span>
+    <span class="pipeline-step">Detections</span>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<!-- SLIDE 19a — What is YOLO? History -->
+<!-- ============================================================ -->
+<section>
+  <h2>🔍 What is YOLO? — History</h2>
+  <ul>
+    <li><strong>2015</strong> — YOLOv1 by Joseph Redmon: <em>"You Only Look Once"</em></li>
+    <li><strong>2016-2020</strong> — v2, v3 by Redmon; v4 by Bochkovskiy et al.</li>
+    <li><strong>2021</strong> — <strong>YOLOv5</strong> by Ultralytics (Glenn Jocher). First YOLO in PyTorch.</li>
+    <li><strong>2023-2025</strong> — YOLOv8, v9, v10, v11 by various teams</li>
+  </ul>
+  <div class="highlight-box">
+    Unlike R-CNN (multi-pass), YOLO processes the entire image in a <strong>single forward pass</strong>.
+  </div>
+  <div class="two-col">
+    <div>
+      <h3>How It Works</h3>
+      <ol>
+        <li>Divide image into <strong>S×S grid</strong></li>
+        <li>Each cell predicts <strong>B boxes</strong> + confidence</li>
+        <li>Each cell predicts <strong>C class probabilities</strong></li>
+        <li>NMS removes overlapping boxes</li>
+      </ol>
+    </div>
+    <div>
+      <h3>YOLOv5 Variants</h3>
+      <table>
+        <tr><th>Model</th><th>Params</th><th>Speed</th></tr>
+        <tr><td><strong>v5n (nano) ← ours</strong></td><td>1.9M</td><td>Fastest</td></tr>
+        <tr><td>v5s (small)</td><td>7.2M</td><td>Fast</td></tr>
+        <tr><td>v5m (medium)</td><td>21.2M</td><td>Balanced</td></tr>
+        <tr><td>v5l / v5x</td><td>46–87M</td><td>Accurate</td></tr>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<!-- SLIDE 20 — COCO Dataset -->
+<!-- ============================================================ -->
+<section>
+  <h2>📦 COCO Dataset &amp; Labels</h2>
+  <div class="two-col">
+    <div>
+      <h3>What is COCO?</h3>
+      <ul>
+        <li><strong>Common Objects in Context</strong> — benchmark dataset by Microsoft</li>
+        <li>330K images, 80 object categories</li>
+        <li>Standard benchmark for object detection since 2014</li>
+      </ul>
+      <div class="warn-box">
+        <strong>Fun finding:</strong> The pre-trained YOLOv5n recognizes
+        our game sprites as real-world objects!<br>
+        🚀 Player → <strong>"Stop Sign"</strong> &nbsp;
+        🪨 Obstacles → <strong>"Surfboard"</strong> / <strong>"Frisbee"</strong>
+      </div>
+    </div>
+    <div>
+      <h3>labels.json (excerpt)</h3>
+      <pre><code class="language-json">[
+  "person",      // 0
+  "bicycle",     // 1
+  "car",         // 2   ...
+  "stop sign",   // 11  ...
+  "frisbee",     // 29  ...
+  "kite",        // 33  ...
+  "surfboard",   // 37  ...
+]  // 80 classes total</code></pre>
+      <p class="small">Model outputs a class index → labels.json maps to human-readable name.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<!-- SLIDE 21 — TensorFlow.js -->
+<!-- ============================================================ -->
+<section>
+  <h2>🔧 TensorFlow.js (TFJS)</h2>
+  <div class="two-col">
+    <div>
+      <h3>What is it?</h3>
+      <ul>
+        <li>Google's ML library for JavaScript</li>
+        <li>Run / train / convert ML models in the browser or Node.js</li>
+        <li>Backends: <strong>WebGL</strong> (GPU), <strong>WASM</strong>, <strong>CPU</strong></li>
+        <li>Loads models from PyTorch, TF, Keras, ONNX</li>
+      </ul>
+    </div>
+    <div>
+      <h3>Key Concepts</h3>
+      <div class="highlight-box">
+        <strong>Tensor</strong> — Multi-dimensional array.<br>
+        <code>[3]</code> → 1D &nbsp; <code>[3, 4]</code> → 2D &nbsp; <code>[1, 640, 640, 3]</code> → 4D
+      </div>
+    </div>
+  </div>
+  <div class="warn-box">
+    <strong>Memory management:</strong> Tensors live on the GPU. You must manually
+    <code>dispose()</code> them or wrap code in <code>tf.tidy()</code> to avoid memory leaks!
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<!-- SLIDE 22 — Web Workers Deep Dive -->
+<!-- ============================================================ -->
+<section>
+  <h2>⚙️ Web Workers — Why &amp; How</h2>
+  <div class="two-col">
+    <div>
+      <h3>The Problem</h3>
+      <p>JavaScript is <strong>single-threaded</strong>. Running a neural network (50-200ms)
+         on the main thread would <strong>freeze the game loop</strong>.</p>
+      <h3>The Solution</h3>
+      <p><strong>Web Workers</strong> run JS in a <strong>separate OS thread</strong>,
+         communicating via <code>postMessage()</code>.</p>
+      <div class="highlight-box">
+        <strong>Workers cannot:</strong> access DOM, <code>window</code>,
+        or <code>canvas</code>. Messages only.
+      </div>
+    </div>
+    <div>
+      <h3>Communication Flow</h3>
+      <pre><code class="language-text">Main Thread          Web Worker
+    │──── predict ────▶  │
+    │    (ImageBitmap)    │ ← runs YOLOv5
+    │◀── prediction ────  │
+    │    (bounding boxes) │
+    │──── gameState ──▶  │
+    │    (positions)      │ ← decides action
+    │◀── action ────────  │
+    │    (jump/none)      │</code></pre>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<!-- SLIDE 23 — GameWorker.js - Loading -->
+<!-- ============================================================ -->
+<section>
+  <h2>🧠 GameWorker.js — Model Loading</h2>
+  <pre><code class="language-javascript">importScripts('https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest')
+const MODEL_PATH = '../machine-learning/yolov5n_web_model/model.json'
+const LABELS_PATH = '../machine-learning/yolov5n_web_model/labels.json'
+
+async function loadModelYOLOv5AndItsLabels() {
+  await tf.ready()                                   // 1. Init TF backend
+  _labels = await (await fetch(LABELS_PATH)).json()  // 2. Load class names
+  _model = await tf.loadGraphModel(MODEL_PATH)       // 3. Load model
+  // 4. Warmup — compile WebGL shaders
+  const dummyInput = tf.ones(_model.inputs[0].shape)
+  await _model.executeAsync(dummyInput)
+  tf.dispose(dummyInput)
+  postMessage({ type: 'model-loaded' })              // 5. Signal ready
+}</code></pre>
+  <div class="green-box">
+    <strong>Warmup:</strong> First inference is slow (WebGL compiles shaders + allocates GPU buffers).
+    A dummy run at startup makes real predictions fast.
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<!-- SLIDE 24 — GameWorker.js - Image Preprocessing -->
+<!-- ============================================================ -->
+<section>
+  <h2>🧠 GameWorker.js — Image Preprocessing</h2>
+  <pre><code class="language-javascript">function createAndFormatImageTensor(image) {
+  return tf.tidy(() => {                                // Auto-dispose intermediates
+    const tensorImage = tf.browser.fromPixels(image)    // [400, 800, 3] H×W×RGB
+    return tf.image
+      .resizeBilinear(tensorImage, [640, 640])          // [640, 640, 3]
+      .div(255)                                         // Normalize to [0, 1]
+      .expandDims(0)                                    // [1, 640, 640, 3]
+  })
+}</code></pre>
+  <div style="text-align:center; margin: 10px 0;">
+    <span class="pipeline-step">ImageBitmap<br><span class="small">800×400</span></span>
+    <span class="pipeline-arrow">→</span>
+    <span class="pipeline-step">fromPixels<br><span class="small">[400,800,3]</span></span>
+    <span class="pipeline-arrow">→</span>
+    <span class="pipeline-step">resize<br><span class="small">[640,640,3]</span></span>
+    <span class="pipeline-arrow">→</span>
+    <span class="pipeline-step">÷ 255<br><span class="small">0–1</span></span>
+    <span class="pipeline-arrow">→</span>
+    <span class="pipeline-step">expandDims<br><span class="small">[1,640,640,3]</span></span>
+  </div>
+  <div class="highlight-box">
+    <strong>tf.tidy()</strong> auto-disposes all intermediate tensors in the callback,
+    except the returned one. Essential for preventing GPU memory leaks.
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<!-- SLIDE 25 — GameWorker.js - Inference -->
+<!-- ============================================================ -->
+<section>
+  <h2>🧠 GameWorker.js — Running Inference</h2>
+  <pre><code class="language-javascript">async function runYoloModelOverTensorAndGetDetections(tensor) {
+  const output = await _model.executeAsync(tensor)     // 1. Run model
+  tf.dispose(tensor)                                   // 2. Free input
+
+  const [boxes, scores, classes] = output.slice(0, 3)  // 3. Extract outputs
+
+  const [boxesData, scoresData, classesData] =         // 4. GPU → CPU
+    await Promise.all([boxes.data(), scores.data(), classes.data()])
+
+  output.forEach(t => t.dispose())                     // 5. Free outputs
+  return { boxes: boxesData, scores: scoresData, classes: classesData }
+}</code></pre>
+  <div class="warn-box">
+    <strong>Model outputs (YOLOv5):</strong>
+    <strong>boxes</strong> [x1,y1,x2,y2] ·
+    <strong>scores</strong> confidence 0–1 ·
+    <strong>classes</strong> integer index → labels.json
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<!-- SLIDE 26 — GameWorker.js - Processing Predictions -->
+<!-- ============================================================ -->
+<section>
+  <h2>🧠 GameWorker.js — Processing Predictions</h2>
+  <pre><code class="language-javascript">// Generator function — yields predictions one at a time
+function* processPrediction({ boxes, scores, classes }, width, height) {
+  for (let index = 0; index < scores.length; index++) {
+    if (scores[index] < CLASS_THRESHOLD) continue  // Filter low confidence
+
+    const label = _labels[classes[index]]
+    console.log(`[Worker] Detection: ${label} (confidence: ${scores[index].toFixed(2)})`)
+  }
+}</code></pre>
+  <div class="two-col">
+    <div>
+      <div class="highlight-box">
+        <strong>Generator Functions (function*)</strong><br>
+        A special JavaScript function that can <strong>pause and resume</strong> execution.
+        Uses <code>yield</code> to emit values lazily, one at a time.
+        No intermediate array is created, saving memory.
+      </div>
+    </div>
+    <div>
+      <div class="warn-box">
+        <strong>CLASS_THRESHOLD = 0.5</strong><br>
+        Only detections with confidence ≥ 50% are kept.
+        This filters out noise and false positives.
+        In production, you'd tune this based on precision/recall requirements.
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<!-- SLIDE 27 — GameWorker.js - Message Handler -->
+<!-- ============================================================ -->
+<section>
+  <h2>🧠 GameWorker.js — Message Handler</h2>
+  <pre><code class="language-javascript">self.postMessage({ type: 'ready' })        // Signal: worker is alive
+
+self.onmessage = async (e) => {
+  const { type } = e.data
+  if (type === 'predict') {
+    if (!_model) return
+    const input = createAndFormatImageTensor(e.data.image)
+    const { width, height } = e.data.image
+    const results = await runYoloModelOverTensorAndGetDetections(input)
+    for (const prediction of processPrediction(results, width, height))
+      postMessage({ type: 'prediction', ...prediction })
+  }
+  if (type === 'gameState') {
+    // TODO: Use state (player pos, obstacles) to decide action
+  }
+}
+loadModelYOLOv5AndItsLabels()</code></pre>
+  <div class="highlight-box">
+    <strong>Two input channels:</strong>
+    <code>predict</code> = visual (image frame) ·
+    <code>gameState</code> = numerical (positions, score)
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<!-- SLIDE 28 — Key Terms Glossary 1 -->
+<!-- ============================================================ -->
+<section>
+  <h2>📖 Glossary — Game Development</h2>
+  <table>
+    <thead><tr><th>Term</th><th>Definition</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Game Loop</strong></td><td>update → draw → repeat at ~60 fps</td></tr>
+      <tr><td><strong>Canvas 2D</strong></td><td>HTML5 pixel-level drawing API (immediate-mode)</td></tr>
+      <tr><td><strong>Sprite</strong></td><td>2D image representing a game entity</td></tr>
+      <tr><td><strong>AABB</strong></td><td>Axis-Aligned Bounding Box — O(1) collision, 4 comparisons</td></tr>
+      <tr><td><strong>Euler Integration</strong></td><td><code>vel += accel; pos += vel</code> — simplest physics</td></tr>
+      <tr><td><strong>Spawn Rate</strong></td><td>Frame interval between creating new obstacles</td></tr>
+      <tr><td><strong>HUD</strong></td><td>Heads-Up Display — UI overlay (score, level)</td></tr>
+      <tr><td><strong>Side-Scroller</strong></td><td>World moves toward fixed player → illusion of movement</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ============================================================ -->
+<!-- SLIDE 29 — Key Terms Glossary 2 -->
+<!-- ============================================================ -->
+<section>
+  <h2>📖 Glossary — Machine Learning</h2>
+  <table>
+    <thead><tr><th>Term</th><th>Definition</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Tensor</strong></td><td>N-dim array. Images → [batch, H, W, channels]</td></tr>
+      <tr><td><strong>Inference</strong></td><td>Running a trained model on new data (not training)</td></tr>
+      <tr><td><strong>Bounding Box</strong></td><td>Rectangle [x1, y1, x2, y2] locating an object</td></tr>
+      <tr><td><strong>Confidence</strong></td><td>0–1 value: how sure the model is about a detection</td></tr>
+      <tr><td><strong>Normalization</strong></td><td>÷255 scales pixels from 0–255 to 0–1</td></tr>
+      <tr><td><strong>Warmup</strong></td><td>Dummy inference to pre-compile GPU shaders</td></tr>
+      <tr><td><strong>NMS</strong></td><td>Non-Max Suppression — removes duplicate boxes</td></tr>
+      <tr><td><strong>COCO</strong></td><td>80-class benchmark dataset by Microsoft Research</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ============================================================ -->
+<!-- SLIDE 30 — Key Terms Glossary 3 -->
+<!-- ============================================================ -->
+<section>
+  <h2>📖 Glossary — Web Platform (1/2)</h2>
+  <table>
+    <thead><tr><th>Term</th><th>Definition</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Web Worker</strong></td><td>JS in a separate OS thread via <code>postMessage</code></td></tr>
+      <tr><td><strong>postMessage</strong></td><td>Send data between main thread ↔ workers</td></tr>
+      <tr><td><strong>Transferable</strong></td><td>Zero-copy ownership transfer (ImageBitmap, ArrayBuffer)</td></tr>
+      <tr><td><strong>ImageBitmap</strong></td><td>GPU-ready bitmap, transferable to Workers</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ============================================================ -->
+<!-- SLIDE 30b — Key Terms Glossary 3b -->
+<!-- ============================================================ -->
+<section>
+  <h2>📖 Glossary — Web Platform (2/2)</h2>
+  <table>
+    <thead><tr><th>Term</th><th>Definition</th></tr></thead>
+    <tbody>
+      <tr><td><strong>importScripts</strong></td><td>Worker API to load external scripts (no ES Modules)</td></tr>
+      <tr><td><strong>tf.tidy()</strong></td><td>Auto-dispose intermediate tensors, prevent GPU leaks</td></tr>
+      <tr><td><strong>WebGL</strong></td><td>GPU API — TFJS uses it for fast tensor math</td></tr>
+      <tr><td><strong>ES Modules</strong></td><td>Native <code>import/export</code>, no bundler needed</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ============================================================ -->
+<!-- SLIDE 31 — Data Flow Summary -->
+<!-- ============================================================ -->
+<section>
+  <h2>🔄 Complete Data Flow</h2>
+  <div class="architecture-diagram">
+    <pre style="color:#c9d1d9; font-size:0.8em; line-height:1.5;">
+  ┌────────────────── MAIN THREAD ──────────────────┐
+  │  Keyboard ──▶ Input.js ──▶ Player.jump()        │
+  │                                                  │
+  │  loop() ──▶ Game.update()                        │
+  │               ├── Player.update()   (gravity)    │
+  │               ├── Obstacle.update() (move left)  │
+  │               ├── collide()         (AABB)       │
+  │               └── LevelManager.update()          │
+  │             Game.draw() → clearRect → entities   │
+  │               Every 200ms: createImageBitmap()   │
+  ├─────────── postMessage (Transferable) ───────────┤
+  │                  WEB WORKER                      │
+  │  GameWorker.js                                   │
+  │    ├── fromPixels → resize → normalize           │
+  │    ├── YOLOv5n inference                         │
+  │    └── processPrediction → postMessage           │
+  │              └── { type:'action', action:'jump' }│
+  │                       ▼                          │
+  │              Game → player.jump()                │
+  └──────────────────────────────────────────────────┘
+    </pre>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<!-- SLIDE 32 — Design Decisions -->
+<!-- ============================================================ -->
+<section>
+  <h2>🎨 Key Design Decisions</h2>
+  <div class="two-col">
+    <div>
+      <div class="green-box">
+        <strong>✅ Good choices</strong>
+        <ul>
+          <li><strong>Web Worker</strong> — main thread stays at 60 fps</li>
+          <li><strong>Transferable ImageBitmap</strong> — zero-copy</li>
+          <li><strong>YOLOv5n</strong> — smallest model for real-time</li>
+          <li><strong>tf.tidy() + dispose()</strong> — GPU memory mgmt</li>
+          <li><strong>Generator</strong> — lazy, memory-efficient</li>
+          <li><strong>ES Modules</strong> — no build step</li>
+        </ul>
+      </div>
+    </div>
+    <div>
+      <div class="warn-box">
+        <strong>🔮 Future opportunities</strong>
+        <ul>
+          <li>Build an <strong>autonomous agent</strong> from gameState + detections</li>
+          <li>Fine-tune YOLOv5 on game sprites</li>
+          <li><strong>OffscreenCanvas</strong> for Worker rendering</li>
+          <li><strong>Reinforcement Learning</strong> (Q-learning / NEAT)</li>
+          <li>Bounding box overlay for debug</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<!-- SLIDE 33 — How The AI Could Play -->
+<!-- ============================================================ -->
+<section>
+  <h2>🤖 How Could The AI Actually Play?</h2>
+  <p>The Worker detects objects but doesn't decide actions yet. Two approaches:</p>
+  <div class="two-col">
+    <div>
+      <h3>Approach 1: Rule-Based</h3>
+      <pre><code class="language-javascript">if (type === 'gameState') {
+  const { player, obstacles } = state
+  const nearest = obstacles
+    .filter(o => o.x > player.x)
+    .sort((a, b) => a.x - b.x)[0]
+  if (nearest) {
+    const gap = nearest.y + nearest.h / 2
+    if (player.y > gap + 20)
+      postMessage({ type:'action', action:'jump' })
+  }
+}</code></pre>
+    </div>
+    <div>
+      <h3>Approach 2: Vision-Based</h3>
+      <pre><code class="language-javascript">// Using YOLO detections:
+// 1. Find player bounding box
+// 2. Find nearest obstacle box
+// 3. Compare Y positions → jump?
+
+// Hybrid: gameState (fast) +
+// YOLO (visual confirmation)</code></pre>
+      <div class="highlight-box">
+        The <code>TODO</code> in the codebase is exactly this decision logic.
+        The infrastructure is already in place!
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<!-- SLIDE 34 — Performance Considerations -->
+<!-- ============================================================ -->
+<section>
+  <h2>⚡ Performance Considerations</h2>
+  <table>
+    <thead><tr><th>Metric</th><th>Value</th><th>Notes</th></tr></thead>
+    <tbody>
+      <tr><td>Game loop target</td><td>~16.67 ms (60 fps)</td><td>requestAnimationFrame syncs to monitor</td></tr>
+      <tr><td>YOLO inference</td><td>~50–200 ms</td><td>GPU-dependent; runs in Worker (non-blocking)</td></tr>
+      <tr><td>Frame capture</td><td>200 ms (5 fps)</td><td>Balance: AI responsiveness vs CPU load</td></tr>
+      <tr><td>Model size</td><td>~4 MB</td><td>Downloaded once, cacheable</td></tr>
+      <tr><td>Input tensor</td><td>640×640×3</td><td>~1.2M float32 values per frame</td></tr>
+    </tbody>
+  </table>
+  <div class="highlight-box">
+    <strong>Why 200ms?</strong> YOLOv5 at 60 fps would overwhelm most GPUs.
+    5 fps gives the AI enough updates to react while keeping the game smooth.
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<!-- SLIDE 35 — Tensor Shape Journey -->
+<!-- ============================================================ -->
+<section>
+  <h2>📐 Tensor Shape Journey</h2>
+  <table>
+    <thead><tr><th>Step</th><th>Shape</th><th>Type</th><th>What happened</th></tr></thead>
+    <tbody>
+      <tr><td>Canvas</td><td>800 × 400</td><td>RGBA pixels</td><td>Raw game frame</td></tr>
+      <tr><td>ImageBitmap</td><td>800 × 400</td><td>Bitmap</td><td>GPU-ready copy</td></tr>
+      <tr><td>fromPixels</td><td>[400, 800, 3]</td><td>int32</td><td>RGB tensor (A dropped)</td></tr>
+      <tr><td>resizeBilinear</td><td>[640, 640, 3]</td><td>float32</td><td>Scaled to model size</td></tr>
+      <tr><td>div(255)</td><td>[640, 640, 3]</td><td>float32 (0-1)</td><td>Normalized</td></tr>
+      <tr><td>expandDims(0)</td><td>[1, 640, 640, 3]</td><td>float32</td><td>Batch dim added</td></tr>
+      <tr><td>Model output</td><td>varies</td><td>float32</td><td>boxes, scores, classes</td></tr>
+    </tbody>
+  </table>
+  <div class="warn-box">
+    <strong>[Batch, Height, Width, Channels]</strong> — NHWC format (TF standard).
+    PyTorch uses NCHW. Batch dim (N=1) required even for a single image.
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<!-- SLIDE 36 — Summary -->
+<!-- ============================================================ -->
+<section class="center">
+  <h2>📝 Summary</h2>
+  <br>
+  <div style="text-align: left; max-width: 800px; margin: 0 auto;">
+    <div class="green-box">
+      <ul>
+        <li><strong>6 game classes</strong> — clean separation of concerns (Game, Player, Obstacle, Collision, Input, LevelManager)</li>
+        <li><strong>1 Web Worker</strong> — runs YOLOv5n inference in a separate thread</li>
+        <li><strong>Full AI pipeline</strong> — image capture → tensor preprocessing → inference → detection filtering</li>
+        <li><strong>Zero backend</strong> — everything runs client-side in the browser</li>
+        <li><strong>Production patterns</strong> — transferable objects, GPU memory management, generator functions</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<!-- SLIDE 37 — Thank You -->
+<!-- ============================================================ -->
+<section class="center">
+  <h1>🎮 Demo Time!</h1>
+  <br>
+  <h3>Questions?</h3>
+  <br>
+  <p class="small">Open <code>index.html</code> in Chrome (with DevTools console to see detections)</p>
+</section>
+
+</div><!-- /.slides -->
+</div><!-- /.reveal -->
+
+<script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/plugin/highlight/highlight.js"></script>
+<script>
+  Reveal.initialize({
+    hash: true,
+    slideNumber: true,
+    width: 1200,
+    height: 700,
+    margin: 0.06,
+    transition: 'slide',
+    plugins: [RevealHighlight]
+  });
+</script>
+</body>
+</html>

@@ -15,10 +15,14 @@
 
 import Game from "./Game.js" // Importa a classe principal do jogo
 
+
 const canvas = document.getElementById("game") // Busca o elemento <canvas id="game"> no HTML
 const ctx = canvas.getContext("2d") // Obtém o contexto 2D usado para desenhar no canvas
 
-const game = new Game(canvas, ctx) // Cria a instância do jogo passando canvas e contexto
+// Cria o Web Worker em thread separada para processar frames (IA/predição)
+const worker = new Worker("./js/GameWorker.js")
+
+const game = new Game(canvas, ctx, worker) // Cria a instância do jogo passando canvas, contexto e worker
 
 // Game loop: função que roda infinitamente a ~60fps
 function loop() {

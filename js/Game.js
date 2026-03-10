@@ -27,9 +27,10 @@ import Input from "./Input.js"             // Gerenciador de entrada do teclado
 export default class Game {
 
   // constructor — Inicializa todos os componentes do jogo
-  constructor(canvas, ctx) {
+  constructor(canvas, ctx, worker) {
     this.canvas = canvas   // Referência ao elemento <canvas>
     this.ctx = ctx         // Contexto 2D para desenhar
+    this.worker = worker   // Web Worker para processar frames em thread separada
 
     this.bg = new Image()          // Cria objeto de imagem para o fundo
     this.bg.src = "./assets/bg.png" // Carrega a imagem de background
@@ -42,8 +43,63 @@ export default class Game {
 
     this.running = true                  // Flag que indica se o jogo está rodando
     this.levelManager = new LevelManager() // Gerenciador de dificuldade
+    this.predictions = []  // Detecções do YOLO (bounding boxes para debug visual)
 
     new Input(this.player) // Registra os controles do teclado (Espaço → pulo)
+
+    this.setupWorker() // Configura comunicação com o Worker
+  }
+
+  // setupWorker — Configura envio periódico de frames e escuta respostas do Worker
+  setupWorker() {
+    // Escuta mensagens vindas do Worker
+    this.worker.onmessage = (e) => {
+      const { type } = e.data
+
+      if (type === 'ready') {
+        console.log('[Game] Worker pronto')
+      }
+
+      if (type === 'action') {
+        if (e.data.action === 'jump') {
+          this.player.jump() // Worker mandou pular
+        }
+      }
+
+      if (type === 'prediction') {
+        this.predictions.push({
+          label: e.data.label,
+          confidence: e.data.confidence,
+          bbox: e.data.bbox,
+          timestamp: performance.now()
+        })
+        // Remove predições antigas (> 500ms) para não acumular
+        const now = performance.now()
+        this.predictions = this.predictions.filter(p => now - p.timestamp < 500)
+      }
+
+    }
+
+    // Envia snapshot do canvas ao Worker a cada 200ms
+    this.snapshotInterval = setInterval(async () => {
+      if (!this.running) return
+
+      // Captura o canvas como ImageBitmap e envia ao Worker
+      const bitmap = await createImageBitmap(this.canvas)
+      //
+      this.worker.postMessage({ type: 'predict', image: bitmap }, [bitmap])
+
+      // Também envia o estado do jogo (dados numéricos, mais leve)
+      this.worker.postMessage({
+        type: 'gameState',
+        state: {
+          player: { x: this.player.x, y: this.player.y, vy: this.player.vy },
+          obstacles: this.obstacles.map(o => ({ x: o.x, y: o.y, w: o.w, h: o.h })),
+          score: this.score,
+          level: this.levelManager.level
+        }
+      })
+    }, 200)
   }
 
   // spawn — Cria um novo obstáculo na borda direita e o adiciona à lista
@@ -131,9 +187,25 @@ export default class Game {
     this.ctx.fillText("Score: " + this.score, 10, 25)
     this.ctx.fillText("Level: " + this.levelManager.level, 10, 50)
 
+    // Desenha bounding boxes das detecções YOLO (retângulos vermelhos)
+    this.drawPredictions();
+    
     // Se o jogo acabou, desenha a tela de Game Over por cima de tudo
     if (!this.running) {
       this.drawGameOver()
+    }
+  }
+
+  drawPredictions() {
+
+    for (const pred of this.predictions) {
+      const [x1, y1, x2, y2] = pred.bbox
+      this.ctx.strokeStyle = "red"
+      this.ctx.lineWidth = 2
+      this.ctx.strokeRect(x1, y1, x2 - x1, y2 - y1)
+      this.ctx.fillStyle = "red"
+      this.ctx.font = "14px Arial"
+      this.ctx.fillText(`${pred.label} ${(pred.confidence * 100).toFixed(0)}%`, x1, y1 - 4)
     }
   }
 
@@ -180,6 +252,8 @@ export default class Game {
   gameOver() {
     if(!this.running) return  // Evita chamar gameOver() múltiplas vezes
     this.running = false      // Para o update() nos próximos frames
+
+    clearInterval(this.snapshotInterval) // Para de enviar frames ao Worker
 
     // Escuta Espaço para reiniciar o jogo (em vez de alert + reload automático)
     document.addEventListener("keydown", (e) => {

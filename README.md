@@ -19,8 +19,9 @@ Usar **YOLO** para identificar os obstáculos na tela e fazer a IA ganhar o jogo
    git clone https://github.com/seu-usuario/flap-bird-ia.git
    cd flap-bird-ia
    ```
+2. Instalar node 22
 
-2. Abra o arquivo `index.html` no navegador:
+3. Abra o arquivo `index.html` no navegador:
    ```bash
    # Opção 1: abrir direto
    open index.html
@@ -29,7 +30,7 @@ Usar **YOLO** para identificar os obstáculos na tela e fazer a IA ganhar o jogo
    npx serve .
    ```
 
-3. Pronto! O jogo inicia automaticamente no navegador.
+4. Pronto! O jogo inicia automaticamente no navegador.
 
 ## Estrutura do Projeto
 
