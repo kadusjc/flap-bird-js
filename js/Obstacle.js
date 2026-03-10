@@ -22,7 +22,7 @@ export default class Obstacle {
     this.x = canvas.width // Nasce na borda direita da tela (vai se mover para a esquerda)
 
     // Posição vertical aleatória, garantindo que caiba dentro do canvas
-    this.y = Math.random() * (canvas.height - this.h)
+    this.y = Math.random() * (canvas.height - this.h) - 30
 
     this.sprite = new Image()                // Cria objeto de imagem
     this.sprite.src = "./assets/obstacle.png" // Carrega o sprite do obstáculo

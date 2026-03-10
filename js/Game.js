@@ -27,9 +27,10 @@ import Input from "./Input.js"             // Gerenciador de entrada do teclado
 export default class Game {
 
   // constructor — Inicializa todos os componentes do jogo
-  constructor(canvas, ctx) {
+  constructor(canvas, ctx, worker) {
     this.canvas = canvas   // Referência ao elemento <canvas>
     this.ctx = ctx         // Contexto 2D para desenhar
+    this.worker = worker   // Web Worker para processar frames em thread separada
 
     this.bg = new Image()          // Cria objeto de imagem para o fundo
     this.bg.src = "./assets/bg.png" // Carrega a imagem de background
@@ -44,6 +45,48 @@ export default class Game {
     this.levelManager = new LevelManager() // Gerenciador de dificuldade
 
     new Input(this.player) // Registra os controles do teclado (Espaço → pulo)
+
+    this.setupWorker() // Configura comunicação com o Worker
+  }
+
+  // setupWorker — Configura envio periódico de frames e escuta respostas do Worker
+  setupWorker() {
+    // Escuta mensagens vindas do Worker
+    this.worker.onmessage = (e) => {
+      const { type } = e.data
+
+      if (type === 'ready') {
+        console.log('[Game] Worker pronto')
+      }
+
+      if (type === 'action') {
+        if (e.data.action === 'jump') {
+          this.player.jump() // Worker mandou pular
+        }
+      }
+
+    }
+
+    // Envia snapshot do canvas ao Worker a cada 200ms
+    this.snapshotInterval = setInterval(async () => {
+      if (!this.running) return
+
+      // Captura o canvas como ImageBitmap e envia ao Worker
+      const bitmap = await createImageBitmap(this.canvas)
+      //
+      this.worker.postMessage({ type: 'predict', image: bitmap }, [bitmap])
+
+      // Também envia o estado do jogo (dados numéricos, mais leve)
+      this.worker.postMessage({
+        type: 'gameState',
+        state: {
+          player: { x: this.player.x, y: this.player.y, vy: this.player.vy },
+          obstacles: this.obstacles.map(o => ({ x: o.x, y: o.y, w: o.w, h: o.h })),
+          score: this.score,
+          level: this.levelManager.level
+        }
+      })
+    }, 200)
   }
 
   // spawn — Cria um novo obstáculo na borda direita e o adiciona à lista
@@ -180,6 +223,8 @@ export default class Game {
   gameOver() {
     if(!this.running) return  // Evita chamar gameOver() múltiplas vezes
     this.running = false      // Para o update() nos próximos frames
+
+    clearInterval(this.snapshotInterval) // Para de enviar frames ao Worker
 
     // Escuta Espaço para reiniciar o jogo (em vez de alert + reload automático)
     document.addEventListener("keydown", (e) => {
