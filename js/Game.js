@@ -45,9 +45,25 @@ export default class Game {
     this.levelManager = new LevelManager() // Gerenciador de dificuldade
     this.predictions = []  // Detecções do YOLO (bounding boxes para debug visual)
 
+    // Sistema de anúncio de level up
+    this.levelAnnounce = null  // { level, startTime }
+    this.levelColors = [
+      '#00FF88', // Level 1 — verde neon
+      '#00BFFF', // Level 2 — azul celeste
+      '#FFD700', // Level 3 — dourado
+      '#FF6B35', // Level 4 — laranja
+      '#FF1493', // Level 5 — rosa forte
+      '#9B59FF', // Level 6 — roxo
+      '#00FFFF', // Level 7 — ciano
+      '#FF0040', // Level 8 — vermelho intenso
+    ]
+
     new Input(this.player) // Registra os controles do teclado (Espaço → pulo)
 
     this.setupWorker() // Configura comunicação com o Worker
+
+    // Mostra "LEVEL 1" ao iniciar o jogo
+    this.levelAnnounce = { level: 1, startTime: performance.now() }
   }
 
   // setupWorker — Configura envio periódico de frames e escuta respostas do Worker
@@ -89,16 +105,6 @@ export default class Game {
       //
       this.worker.postMessage({ type: 'predict', image: bitmap }, [bitmap])
 
-      // Também envia o estado do jogo (dados numéricos, mais leve)
-      this.worker.postMessage({
-        type: 'gameState',
-        state: {
-          player: { x: this.player.x, y: this.player.y, vy: this.player.vy },
-          obstacles: this.obstacles.map(o => ({ x: o.x, y: o.y, w: o.w, h: o.h })),
-          score: this.score,
-          level: this.levelManager.level
-        }
-      })
     }, 200)
   }
 
@@ -138,13 +144,16 @@ export default class Game {
       o.update(this.levelManager.speed()) // Move o obstáculo para a esquerda na velocidade do nível
 
       if (collide(this.player, o)) { // Testa colisão jogador ↔ obstáculo
-        this.gameOver()              // Se colidiu, fim de jogo
+        this.gameOver();
+        return;// Se colidiu, fim de jogo
       }
 
       if (o.x + o.w < 0) {                  // Se o obstáculo saiu completamente da tela pela esquerda
         this.obstacles.splice(i, 1)          // Remove da lista
         this.score++                         // Incrementa a pontuação
-        this.levelManager.update(this.score) // Verifica se deve subir de nível
+        if (this.levelManager.update(this.score)) { // Verifica se subiu de nível
+          this.levelAnnounce = { level: this.levelManager.level, startTime: performance.now() }
+        }
       }
     }
   }
@@ -189,6 +198,9 @@ export default class Game {
 
     // Desenha bounding boxes das detecções YOLO (retângulos vermelhos)
     this.drawPredictions();
+
+    // Desenha anúncio de level up (se ativo)
+    this.drawLevelAnnounce()
     
     // Se o jogo acabou, desenha a tela de Game Over por cima de tudo
     if (!this.running) {
@@ -207,6 +219,50 @@ export default class Game {
       this.ctx.font = "14px Arial"
       this.ctx.fillText(`${pred.label} ${(pred.confidence * 100).toFixed(0)}%`, x1, y1 - 4)
     }
+  }
+
+  // drawLevelAnnounce — Exibe "LEVEL X" grande na tela por 2 segundos com fade out
+  drawLevelAnnounce() {
+    if (!this.levelAnnounce) return
+
+    const elapsed = performance.now() - this.levelAnnounce.startTime
+    const duration = 2000 // 2 segundos de exibição
+
+    if (elapsed > duration) {
+      this.levelAnnounce = null
+      return
+    }
+
+    const cx = this.canvas.width / 2
+    const cy = this.canvas.height / 2
+
+    // Opacidade: 100% no primeiro segundo, fade out no segundo
+    const alpha = elapsed < 1000 ? 1 : 1 - (elapsed - 1000) / 1000
+
+    // Escala: começa grande (1.3) e diminui até 1.0 nos primeiros 300ms
+    const scale = elapsed < 300 ? 1.3 - 0.3 * (elapsed / 300) : 1.0
+
+    const level = this.levelAnnounce.level
+    const color = this.levelColors[level - 1] || '#FFFFFF'
+
+    this.ctx.save()
+    this.ctx.globalAlpha = alpha
+    this.ctx.textAlign = 'center'
+
+    // Fundo escuro sutil atrás do texto
+    this.ctx.fillStyle = `rgba(0, 0, 0, ${0.4 * alpha})`
+    this.ctx.fillRect(0, cy - 60 * scale, this.canvas.width, 120 * scale)
+
+    // Texto "LEVEL X" com borda preta
+    this.ctx.font = `bold ${Math.round(64 * scale)}px Impact, Arial`
+    this.ctx.strokeStyle = 'black'
+    this.ctx.lineWidth = 6
+    this.ctx.strokeText('LEVEL ' + level, cx, cy + 10)
+    this.ctx.fillStyle = color
+    this.ctx.fillText('LEVEL ' + level, cx, cy + 10)
+
+    this.ctx.restore()
+    this.ctx.textAlign = 'left' // Reseta alinhamento
   }
 
   // drawGameOver — Desenha a tela de fim de jogo com estilo de game em vermelho

@@ -199,6 +199,11 @@ self.onmessage = async (e) => {
   const { type } = e.data
 
   if (type === 'predict') {
+    return handlePredictEvent(e);
+  }
+}
+
+async function handlePredictEvent(e) {
     // Ignora se o modelo ainda não carregou
     if (!_model) {
       console.log('[Worker] Modelo ainda não carregado, ignorando frame')
@@ -224,17 +229,10 @@ self.onmessage = async (e) => {
       // Se a inferência falhar, garante que o tensor de entrada seja liberado
       tf.dispose(input)
       console.error('[Worker] Erro na predição:', err)
-    }
-  }  
-
-  if (type === 'gameState') {
-    const state = e.data.state
-    // TODO: Usar o estado do jogo (posição do jogador, obstáculos, score)
-    // para decidir se deve pular ou não
-    // Exemplo: if (state.player.y > 300) → pular
-    //console.log('[Worker] Estado recebido:', state)
-  }
+    }      
 }
+
+
 
 loadModelYOLOv5AndItsLabels();
 console.log('🧠 YOLOv5n Web Worker initialized');

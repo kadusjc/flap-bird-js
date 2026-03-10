@@ -38,8 +38,9 @@ export default class LevelManager {
   update(score) {
     if (score % 10 === 0 && this.level < 8) {
       this.level++
-      alert("Level " + this.level)
+      return true // Indica que subiu de nível (Game.js cuida da exibição)
     }
+    return false
   }
 
 }
