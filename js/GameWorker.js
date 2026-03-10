@@ -3,7 +3,7 @@ importScripts('https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest');
 const MODEL_PATH = `../machine-learning/yolov5n_web_model/model.json`;
 const LABELS_PATH = `../machine-learning/yolov5n_web_model/labels.json`;
 const INPUT_MODEL_DIMENTIONS = 640
-const CLASS_THRESHOLD = 0.65
+const CLASS_THRESHOLD = 0.5
 
 let _labels = []
 let _model = null
@@ -140,7 +140,8 @@ function* processPrediction({ boxes, scores, classes }, width, height) {
         if (scores[index] < CLASS_THRESHOLD) continue
 
 
-        //No nosso desenho, identificou a nave como "Stop Sign" e os obstaculos como "surfboard" ou "frisbee"
+        //No nosso desenho, identificou os obstaculos como "Stop Sign" e os obstaculos como "surfboard" ou "frisbee"
+        //E a nave (player) como kite ou airplane
         const label = _labels[classes[index]]
         console.log(`[Worker] Detecção: ${label} (confiança: ${scores[index].toFixed(2)})`)
 
