@@ -3,7 +3,7 @@ importScripts('https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest');
 const MODEL_PATH = `../machine-learning/yolov5n_web_model/model.json`;
 const LABELS_PATH = `../machine-learning/yolov5n_web_model/labels.json`;
 const INPUT_MODEL_DIMENTIONS = 640
-const CLASS_THRESHOLD = 0.5
+const CLASS_THRESHOLD = 0.4 // Limiar mínimo de confiança para considerar uma detecção válida (0 a 1)
 
 let _labels = []
 let _model = null
@@ -203,6 +203,7 @@ self.onmessage = async (e) => {
   }
 }
 
+/** Recebe o print da tela a cada 200ms cria tensro, roda modelo YOLOv5 e emite um evento com o resultado */
 async function handlePredictEvent(e) {
     // Ignora se o modelo ainda não carregou
     if (!_model) {
@@ -220,8 +221,9 @@ async function handlePredictEvent(e) {
     try {
       const inferenceResults = await runYoloModelOverTensorAndGetDetections(input)
       for (const prediction of processPrediction(inferenceResults, width, height)) {
+        //para cada resultado, emito
           postMessage({
-              type: 'prediction',
+              type: 'predictionResult',
               ...prediction
           });
       }

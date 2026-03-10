@@ -82,7 +82,7 @@ export default class Game {
         }
       }
 
-      if (type === 'prediction') {
+      if (type === 'predictionResult') {
         this.predictions.push({
           label: e.data.label,
           confidence: e.data.confidence,
@@ -102,7 +102,6 @@ export default class Game {
 
       // Captura o canvas como ImageBitmap e envia ao Worker
       const bitmap = await createImageBitmap(this.canvas)
-      //
       this.worker.postMessage({ type: 'predict', image: bitmap }, [bitmap])
 
     }, 200)
