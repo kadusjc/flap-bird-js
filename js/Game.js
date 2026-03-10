@@ -43,6 +43,7 @@ export default class Game {
 
     this.running = true                  // Flag que indica se o jogo está rodando
     this.levelManager = new LevelManager() // Gerenciador de dificuldade
+    this.predictions = []  // Detecções do YOLO (bounding boxes para debug visual)
 
     new Input(this.player) // Registra os controles do teclado (Espaço → pulo)
 
@@ -63,6 +64,18 @@ export default class Game {
         if (e.data.action === 'jump') {
           this.player.jump() // Worker mandou pular
         }
+      }
+
+      if (type === 'prediction') {
+        this.predictions.push({
+          label: e.data.label,
+          confidence: e.data.confidence,
+          bbox: e.data.bbox,
+          timestamp: performance.now()
+        })
+        // Remove predições antigas (> 500ms) para não acumular
+        const now = performance.now()
+        this.predictions = this.predictions.filter(p => now - p.timestamp < 500)
       }
 
     }
@@ -174,9 +187,25 @@ export default class Game {
     this.ctx.fillText("Score: " + this.score, 10, 25)
     this.ctx.fillText("Level: " + this.levelManager.level, 10, 50)
 
+    // Desenha bounding boxes das detecções YOLO (retângulos vermelhos)
+    this.drawPredictions();
+    
     // Se o jogo acabou, desenha a tela de Game Over por cima de tudo
     if (!this.running) {
       this.drawGameOver()
+    }
+  }
+
+  drawPredictions() {
+
+    for (const pred of this.predictions) {
+      const [x1, y1, x2, y2] = pred.bbox
+      this.ctx.strokeStyle = "red"
+      this.ctx.lineWidth = 2
+      this.ctx.strokeRect(x1, y1, x2 - x1, y2 - y1)
+      this.ctx.fillStyle = "red"
+      this.ctx.font = "14px Arial"
+      this.ctx.fillText(`${pred.label} ${(pred.confidence * 100).toFixed(0)}%`, x1, y1 - 4)
     }
   }
 

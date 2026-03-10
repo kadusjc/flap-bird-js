@@ -144,14 +144,15 @@ function* processPrediction({ boxes, scores, classes }, width, height) {
         const label = _labels[classes[index]]
         console.log(`[Worker] Detecção: ${label} (confiança: ${scores[index].toFixed(2)})`)
 
-        if (!['frisbee', 'stop sign', 'kite'].includes(label.toLowerCase())) continue; 
-debugger;
+        //if (!['frisbee', 'stop sign', 'kite'].includes(label.toLowerCase())) continue; 
+
         let [x1, y1, x2, y2] = boxes.slice(index * 4, (index + 1) * 4) //cada box tem 4 dimensões
         x1 *= width
         x2 *= width
         y1 *= height
         y2 *= height
 
+        
         const centerX = (x1 + x2) / 2
         const centerY = (y1 + y2) / 2
 
