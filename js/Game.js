@@ -234,7 +234,7 @@ export default class Game {
     this.ctx.fillText("Level: " + this.levelManager.level, 10, 50)
 
     // Desenha bounding boxes das detecções YOLO (retângulos vermelhos)
-    //this.drawPredictions();
+    this.drawPredictions();
 
     // Desenha anúncio de level up (se ativo)
     this.drawLevelAnnounce()
