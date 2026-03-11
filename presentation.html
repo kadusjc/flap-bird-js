@@ -298,8 +298,7 @@ loop()</code></pre>
   this.won = false           // Win state flag
   this.levelManager = new LevelManager()
   this.predictions = []      // YOLO bounding boxes
-  this.holdUntil = 0         // AI hold position
-  this.holdY = null
+  this.fixedY = null         // AI evasion lock
   this.levelAnnounce = null  // Level-up display
   new Input(this.player)
   this.setupWorker()
@@ -316,10 +315,10 @@ loop()</code></pre>
   <pre style="font-size:0.40em;"><code class="language-javascript">update() {
   if (!this.running) return
   this.frame++
-  // AI hold system: keep player at target Y after evasion
-  if (this.holdY !== null && performance.now() < this.holdUntil) {
-    this.player.y = this.holdY; this.player.vy = 0
-  } else { this.holdY = null; this.player.update() }
+  // AI evasion: if fixedY is set, lock player position; otherwise normal physics
+  if (this.fixedY !== null) {
+    this.player.y = this.fixedY; this.player.vy = 0
+  } else { this.player.update() }
   if (this.frame % this.levelManager.spawnRate() === 0) this.spawn()
 
   for (let i = this.obstacles.length - 1; i >= 0; i--) {   // Backwards loop!
@@ -426,19 +425,30 @@ loop()</code></pre>
   <h2>🤖 Game.js — AI Evasion &amp; Win/Lose</h2>
   <div class="two-col">
     <div>
-      <h3>AI Obstacle Evasion</h3>
-      <pre style="font-size:0.38em;"><code class="language-javascript">makeAirplaneMoveAwayObstacles(prediction) {
-  if (prediction.label !== 'clock') return
-  const obstX = prediction.bbox[0]
-  const obstY = prediction.bbox[1]
-  if (obstX < this.player.x ||
-      obstX - this.player.x > 300) return
-  let targetY = /* check above/below */
-  targetY = Math.max(10, Math.min(340, targetY))
-  this.player.y = targetY
-  this.holdY = targetY  // Hold position 1s
-  this.holdUntil = performance.now() + 1000
-}</code></pre>
+      <h3>AI Obstacle Evasion (5 métodos)</h3>
+      <pre style="font-size:0.34em;"><code class="language-javascript">makeAirplaneMoveAwayObstacles(prediction) {
+  if (prediction.label !== 'clock') { this.releaseFixedY(); return }
+  const obs = this.parseBBox(prediction.bbox)
+  if (!this.isInDangerZone(obs) || !this.willCollideVertically(obs)) {
+    this.releaseFixedY(); return
+  }
+  this.fixedY = this.calcSafeY(obs)
+}
+parseBBox(bbox) { // extracts x1,y1,x2,y2,w,h,size }
+isInDangerZone(obs) {
+  const margin = 60 + obs.size * 0.5
+  const dangerZone = 200 + obs.size * 1.5
+  return obs.x1 <= playerRight + dangerZone && obs.x2 >= player.x - margin
+}
+willCollideVertically(obs) {
+  const margin = 60 + obs.size * 0.5
+  return player.y < obs.y2 + margin && player.y + player.h > obs.y1 - margin
+}
+calcSafeY(obs) {  // picks above or below based on available space
+  const margin = 60 + obs.size * 0.5
+  return spaceAbove >= spaceBelow ? obs.y1 - h - margin : obs.y2 + margin
+}
+releaseFixedY() { // releases only when no obstacle within 150px }</code></pre>
     </div>
     <div>
       <h3>Game Over &amp; You Win</h3>
@@ -460,7 +470,8 @@ youWin() { this.running = false; this.won = true }</code></pre>
   </div>
   <div class="highlight-box">
     <strong>AI loop:</strong> YOLO detects obstacles → Worker sends <code>predictionResult</code> →
-    Game moves player → holds 1s → resumes physics.
+    <code>parseBBox</code> → <code>isInDangerZone</code> → <code>willCollideVertically</code> → <code>calcSafeY</code> → sets <code>fixedY</code>.
+    Margins are <strong>dynamic</strong>: <code>60 + obs.size * 0.5</code>. <code>releaseFixedY()</code> only frees when no obstacle within 150px.
     After 80 obstacles (all 8 levels), golden <strong>"YOU WIN"</strong> appears!
   </div>
 </section>
