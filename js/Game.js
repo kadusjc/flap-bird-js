@@ -46,9 +46,8 @@ export default class Game {
     this.levelManager = new LevelManager() // Gerenciador de dificuldade
     this.predictions = []  // Detecções do YOLO (bounding boxes para debug visual)
 
-    // Sistema de hold pós-evasão: mantém o player na posição por 1s
-    this.holdUntil = 0   // timestamp até quando segurar a posição
-    this.holdY = null     // Y alvo para segurar
+    // Sistema de evasão: Y fixo para travar o player durante desvio
+    this.fixedY = null
 
     // Sistema de anúncio de level up
     this.levelAnnounce = null  // { level, startTime }
@@ -99,6 +98,7 @@ export default class Game {
         this.predictions = this.predictions.filter(p => now - p.timestamp < 500)
         //Fim desenho na tela
 
+        //Metodo que faz a IA jogar sozinha usando as predições do modelo YOLO para detectar os obstáculos e mover o player para evitar colidir com eles
         this.makeAirplaneMoveAwayObstacles(e.data);
       }
     }
@@ -135,12 +135,11 @@ export default class Game {
     if(!this.running) return // Se o jogo acabou, não faz nada
     this.frame++             // Incrementa o contador de frames
 
-    // Se estiver em modo hold (pós-evasão), mantém o player no Y alvo
-    if (this.holdY !== null && performance.now() < this.holdUntil) {
-      this.player.y = this.holdY
+    // Se fixedY está ativo, trava o player na posição segura; senão, atualiza normalmente
+    if (this.fixedY !== null) {
+      this.player.y = this.fixedY
       this.player.vy = 0
     } else {
-      this.holdY = null
       this.player.update()
     }
 
@@ -156,6 +155,10 @@ export default class Game {
       o.update(this.levelManager.speed()) // Move o obstáculo para a esquerda na velocidade do nível
 
       if (collide(this.player, o)) { // Testa colisão jogador ↔ obstáculo
+        console.log('====== Bateu obstaculo x '+o.x+' y '+o.y+ ' Player x '+this.player.x+' y '+this.player.y);
+        console.log('obstaculo y = '+ (o.y - o.h)+ ' Player y = '+this.player.y);
+        console.log('obstaculo x = '+ (o.x - o.w)+ ' Player x = '+this.player.x);
+    
         this.gameOver();
         return;// Se colidiu, fim de jogo
       }
@@ -400,66 +403,74 @@ export default class Game {
 
   //Esse metodo pega os resultados das predições e move o airplane evitando colidir com os obstaculos
   makeAirplaneMoveAwayObstacles(prediction) {
-    if (prediction.label !== 'clock') return // Só reage a obstáculos
-
-    const obstX = prediction.bbox[0]
-    const obstY = prediction.bbox[1]
-    const obsWidth = prediction.bbox[2] - prediction.bbox[0]
-    const obsHeight = prediction.bbox[3] - prediction.bbox[1]
-    const margin = 100 // Distância mínima de segurança
-//329
-    // Só reage se o obstáculo está à frente do player e perto o suficiente
-    if (obstX < this.player.x || obstX - this.player.x > 300) return
-
-    console.log(`⚠️ Obstáculo detectado em (${obstX}, ${obstY})`)
-
-    // Verifica se tem obstáculo em cima ou embaixo antes de decidir
-    const hasObstacleAbove = this.obstacles.some(
-      o => o.y < this.player.y && this.player.y - o.y < margin &&
-           o.x > this.player.x && o.x < this.player.x + 300
-    )
-    const hasObstacleBelow = this.obstacles.some(
-      o => o.y > this.player.y && o.y - this.player.y < margin &&
-           o.x > this.player.x && o.x < this.player.x + 300
-    )
-
-    // Decide: se embaixo está livre, desce. Se em cima está livre, sobe. Senão, sobe como fallback.
-    let targetY
-    if (!hasObstacleBelow && obstY <= this.player.y) {
-      if (!collide(this.player, { x: obstX, y: obstY, w: obsWidth, h: obsHeight })) {
-        targetY = obstY + margin
-      } else {
-        targetY = obstY - margin
-      }
-    } else if (!hasObstacleAbove && obstY >= this.player.y) {
-      if (!collide(this.player, { x: obstX, y: obstY, w: obsWidth, h: obsHeight })) {
-        targetY = obstY - margin
-      } else {
-        targetY = obstY + margin
-      }
-    } else if (!hasObstacleAbove) {
-      targetY = Math.max(obstY - margin, 10)
-    } else if (!hasObstacleBelow) {
-      targetY = Math.min(obstY + margin, 340)
-    } else {
-      targetY = Math.max(obstY - margin, 10)
+    if (prediction.label !== 'clock') {
+      this.releaseFixedY()
+      return
     }
 
-    const obstacleBox = { x: obstX, y: obstY, w: obsWidth, h: obsHeight } 
+    const obstacle = this.parseBBox(prediction.bbox)
 
-    // Garante que fica dentro da tela
-    targetY = Math.max(10, Math.min(340, targetY))
+    if (!this.isInDangerZone(obstacle) || !this.willCollideVertically(obstacle)) {
+      this.releaseFixedY()
+      return
+    }
 
-    if (!collide(this.player, obstacleBox)) {
-      console.log(`✅ Movendo para Y=${targetY} para evitar colisão`)
-      // Move e segura a posição
-      this.player.y = targetY
-      this.player.vy = 0
-      this.holdY = targetY
-      this.holdUntil = (performance.now() - this.levelManager.speed() + 1000)
-    } 
+    this.fixedY = this.calcSafeY(obstacle)
+  }
 
-    console.log(`${targetY < obstY ? '⬆️' : '⬇️'} Moveu para Y=${targetY}`)
+  // Extrai as bordas e tamanho do obstáculo a partir do bbox da predição
+  parseBBox(bbox) {
+    const x1 = bbox[0], y1 = bbox[1], x2 = bbox[2], y2 = bbox[3]
+    const w = x2 - x1, h = y2 - y1
+    const size = Math.max(w, h) // maior dimensão do obstáculo
+    return { x1, y1, x2, y2, w, h, size }
+  }
+
+  // Verifica se o obstáculo está próximo o suficiente do player para reagir
+  // Quanto maior o obstáculo, maior a zona de perigo
+  isInDangerZone(obs) {
+    const margin = 60 + obs.size * 0.5
+    const dangerZone = 200 + obs.size * 1.5
+    const playerRight = this.player.x + this.player.w
+    return obs.x1 <= playerRight + dangerZone && obs.x2 >= this.player.x - margin
+  }
+
+  // Verifica se há risco de colisão no eixo vertical
+  willCollideVertically(obs) {
+    const margin = 60 + obs.size * 0.5
+    return this.player.y < obs.y2 + margin &&
+           this.player.y + this.player.h > obs.y1 - margin
+  }
+
+  // Calcula a posição Y segura para desviar do obstáculo
+  calcSafeY(obs) {
+    const margin = 60 + obs.size * 0.5
+    const spaceAbove = obs.y1
+    const spaceBelow = this.canvas.height - obs.y2
+
+    let targetY
+    if (spaceAbove >= spaceBelow) {
+      targetY = obs.y1 - this.player.h - margin
+    } else {
+      targetY = obs.y2 + margin
+    }
+
+    return Math.max(0, Math.min(350, targetY))
+  }
+
+  // releaseFixedY — Libera o fixedY quando nenhum obstáculo está perto ou se aproximando do player
+  releaseFixedY() {
+    if (this.fixedY === null) return
+
+    // Margem larga à direita (150px) para cobrir o deslocamento do obstáculo entre predições (200ms)
+    const obstaclePassando = this.obstacles.some(o =>
+      o.x < this.player.x + this.player.w + 150 &&
+      o.x + o.w > this.player.x - 30
+    )
+
+    if (!obstaclePassando) {
+      this.fixedY = null
+    }
   }
 
   
