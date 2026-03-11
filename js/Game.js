@@ -42,8 +42,13 @@ export default class Game {
     this.score = 0   // Pontuação do jogador
 
     this.running = true                  // Flag que indica se o jogo está rodando
+    this.won = false                       // Flag que indica se o jogador zerou o jogo
     this.levelManager = new LevelManager() // Gerenciador de dificuldade
     this.predictions = []  // Detecções do YOLO (bounding boxes para debug visual)
+
+    // Sistema de hold pós-evasão: mantém o player na posição por 1s
+    this.holdUntil = 0   // timestamp até quando segurar a posição
+    this.holdY = null     // Y alvo para segurar
 
     // Sistema de anúncio de level up
     this.levelAnnounce = null  // { level, startTime }
@@ -130,7 +135,14 @@ export default class Game {
     if(!this.running) return // Se o jogo acabou, não faz nada
     this.frame++             // Incrementa o contador de frames
 
-    this.player.update() // Atualiza posição do jogador (aplica gravidade)
+    // Se estiver em modo hold (pós-evasão), mantém o player no Y alvo
+    if (this.holdY !== null && performance.now() < this.holdUntil) {
+      this.player.y = this.holdY
+      this.player.vy = 0
+    } else {
+      this.holdY = null
+      this.player.update()
+    }
 
     // Verifica se é hora de criar um novo obstáculo (a cada spawnRate frames)
     if (this.frame % this.levelManager.spawnRate() === 0) {
@@ -153,6 +165,11 @@ export default class Game {
         this.score++                         // Incrementa a pontuação
         if (this.levelManager.update(this.score)) { // Verifica se subiu de nível
           this.levelAnnounce = { level: this.levelManager.level, startTime: performance.now() }
+        }
+        // Verifica se zerou o jogo (completou todos os 8 níveis: 80 pontos)
+        if (this.score >= 80) {
+          this.youWin()
+          return
         }
       }
     }
@@ -202,9 +219,13 @@ export default class Game {
     // Desenha anúncio de level up (se ativo)
     this.drawLevelAnnounce()
     
-    // Se o jogo acabou, desenha a tela de Game Over por cima de tudo
+    // Se o jogo acabou, desenha a tela correspondente por cima de tudo
     if (!this.running) {
-      this.drawGameOver()
+      if (this.won) {
+        this.drawYouWin()
+      } else {
+        this.drawGameOver()
+      }
     }
   }
 
@@ -318,71 +339,128 @@ export default class Game {
     }, { once: true })       // { once: true } remove o listener após o primeiro uso
   }
 
+  // youWin — Jogador zerou o jogo (passou por todas as fases)
+  youWin() {
+    if(!this.running) return
+    this.running = false
+    this.won = true
+
+    clearInterval(this.snapshotInterval)
+
+    document.addEventListener("keydown", (e) => {
+      if (e.code === "Space") {
+        location.reload()
+      }
+    }, { once: true })
+  }
+
+  // drawYouWin — Desenha a tela de vitória em amarelo (mesmo estilo do Game Over)
+  drawYouWin() {
+    const cx = this.canvas.width / 2
+    const cy = this.canvas.height / 2
+
+    // Fundo escuro semi-transparente
+    this.ctx.fillStyle = "rgba(0, 0, 0, 0.7)"
+    this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height)
+
+    // Texto "YOU WIN" grande em amarelo com borda preta
+    this.ctx.textAlign = "center"
+    this.ctx.font = "bold 72px Impact, Arial"
+
+    this.ctx.strokeStyle = "black"
+    this.ctx.lineWidth = 8
+    this.ctx.strokeText("YOU WIN", cx, cy - 40)
+
+    this.ctx.fillStyle = "#FFD700"
+    this.ctx.fillText("YOU WIN", cx, cy - 40)
+
+    // "Congratulations" abaixo em amarelo
+    this.ctx.font = "bold 36px Impact, Arial"
+    this.ctx.strokeStyle = "black"
+    this.ctx.lineWidth = 4
+    this.ctx.strokeText("Congratulations!", cx, cy + 15)
+    this.ctx.fillStyle = "#FFD700"
+    this.ctx.fillText("Congratulations!", cx, cy + 15)
+
+    // Score abaixo em branco
+    this.ctx.font = "bold 32px Impact, Arial"
+    this.ctx.strokeStyle = "black"
+    this.ctx.lineWidth = 4
+    this.ctx.strokeText("Score: " + this.score, cx, cy + 60)
+    this.ctx.fillStyle = "white"
+    this.ctx.fillText("Score: " + this.score, cx, cy + 60)
+
+    // Instrução para reiniciar
+    this.ctx.font = "20px Arial"
+    this.ctx.fillStyle = "#CCCCCC"
+    this.ctx.fillText("Pressione ESPAÇO para reiniciar", cx, cy + 105)
+
+    this.ctx.textAlign = "left"
+  }
+
   //Esse metodo pega os resultados das predições e move o airplane evitando colidir com os obstaculos
   makeAirplaneMoveAwayObstacles(prediction) {
-    const label = prediction.label
-    const x = prediction.bbox[0];
-    const y = prediction.bbox[1];
-    console.log(`🎯 AI predicted ${label} at: (${x}, ${y}) with confidence of ${prediction.confidence.toFixed(2)}`);
+    if (prediction.label !== 'clock') return // Só reage a obstáculos
 
-    if (label === 'airplane') {
-      // Coleta os Y de todos os obstáculos próximos ao avião
-      const nearObstacles = this.obstacles.filter(
-        o => Math.abs(o.x - x) < 200 && Math.abs(o.y - y) < 200
-      )
-      if (nearObstacles.length > 0) {
-        // Encontra o obstáculo mais próximo em Y para reagir a ele
-        const closest = nearObstacles.reduce((a, b) =>
-          Math.abs(a.y - this.player.y) < Math.abs(b.y - this.player.y) ? a : b
-        )
-        console.log(`⚠️ Obstáculo próximo! Evasão inteligente.`)
-        this.evadeObstacle(closest.y)
-      }
-    }
+    const obstX = prediction.bbox[0]
+    const obstY = prediction.bbox[1]
+    const obsWidth = prediction.bbox[2] - prediction.bbox[0]
+    const obsHeight = prediction.bbox[3] - prediction.bbox[1]
+    const margin = 100 // Distância mínima de segurança
+//329
+    // Só reage se o obstáculo está à frente do player e perto o suficiente
+    if (obstX < this.player.x || obstX - this.player.x > 300) return
 
-    if (label === 'clock') {
-      if (Math.abs(this.player.x - x) < 200) {
-        console.log(`⚠️ Avião próximo do obstáculo! Evasão inteligente.`)
-        this.evadeObstacle(y)
-      }
-    }
-  }
+    console.log(`⚠️ Obstáculo detectado em (${obstX}, ${obstY})`)
 
-  // evadeObstacle — Move o avião para um Y confortável, longe do obstáculo
-  // Calcula o targetY que fica a safeDistance do obstáculo, escolhendo a direção
-  // com mais espaço disponível. Ajusta vy proporcionalmente à distância restante.
-  evadeObstacle(obstacleY) {
-    const safeDistance = 120           // Distância confortável em pixels
-    const minY = 20                   // Margem de segurança do topo
-    const maxY = 330                  // Margem de segurança do chão
-    const playerY = this.player.y
+    // Verifica se tem obstáculo em cima ou embaixo antes de decidir
+    const hasObstacleAbove = this.obstacles.some(
+      o => o.y < this.player.y && this.player.y - o.y < margin &&
+           o.x > this.player.x && o.x < this.player.x + 300
+    )
+    const hasObstacleBelow = this.obstacles.some(
+      o => o.y > this.player.y && o.y - this.player.y < margin &&
+           o.x > this.player.x && o.x < this.player.x + 300
+    )
 
-    // Calcula quanto espaço livre tem acima e abaixo do obstáculo
-    const spaceAbove = obstacleY - minY
-    const spaceBelow = maxY - obstacleY
-
-    // Escolhe a direção com mais espaço para fugir
+    // Decide: se embaixo está livre, desce. Se em cima está livre, sobe. Senão, sobe como fallback.
     let targetY
-    if (spaceBelow > spaceAbove) {
-      // Mais espaço embaixo → alvo = abaixo do obstáculo + safeDistance
-      targetY = Math.min(obstacleY + safeDistance, maxY)
+    if (!hasObstacleBelow && obstY <= this.player.y) {
+      if (!collide(this.player, { x: obstX, y: obstY, w: obsWidth, h: obsHeight })) {
+        targetY = obstY + margin
+      } else {
+        targetY = obstY - margin
+      }
+    } else if (!hasObstacleAbove && obstY >= this.player.y) {
+      if (!collide(this.player, { x: obstX, y: obstY, w: obsWidth, h: obsHeight })) {
+        targetY = obstY - margin
+      } else {
+        targetY = obstY + margin
+      }
+    } else if (!hasObstacleAbove) {
+      targetY = Math.max(obstY - margin, 10)
+    } else if (!hasObstacleBelow) {
+      targetY = Math.min(obstY + margin, 340)
     } else {
-      // Mais espaço em cima → alvo = acima do obstáculo - safeDistance
-      targetY = Math.max(obstacleY - safeDistance, minY)
+      targetY = Math.max(obstY - margin, 10)
     }
 
-    // Calcula a diferença entre onde o player está e onde deveria estar
-    const diff = targetY - playerY   // positivo = precisa descer, negativo = precisa subir
+    const obstacleBox = { x: obstX, y: obstY, w: obsWidth, h: obsHeight } 
 
-    // Se já está perto o suficiente do targetY, não faz nada
-    if (Math.abs(diff) < 30) return
+    // Garante que fica dentro da tela
+    targetY = Math.max(10, Math.min(340, targetY))
 
-    // Aplica vy proporcional à distância, com clamping para não explodir
-    // Quanto mais longe do alvo, mais forte o impulso (entre -14 e 10)
-    const strength = Math.min(Math.abs(diff) / 10, diff > 0 ? 10 : 14)
-    this.player.vy = diff > 0 ? strength : -strength
+    if (!collide(this.player, obstacleBox)) {
+      console.log(`✅ Movendo para Y=${targetY} para evitar colisão`)
+      // Move e segura a posição
+      this.player.y = targetY
+      this.player.vy = 0
+      this.holdY = targetY
+      this.holdUntil = (performance.now() - this.levelManager.speed() + 1000)
+    } 
 
-    const direction = diff > 0 ? '⬇️ descendo' : '⬆️ subindo'
-    console.log(`${direction} para Y=${targetY} (obst=${obstacleY}, player=${playerY}, vy=${this.player.vy.toFixed(1)})`)
+    console.log(`${targetY < obstY ? '⬆️' : '⬇️'} Moveu para Y=${targetY}`)
   }
+
+  
 }

@@ -16,44 +16,43 @@
     .reveal h1 { font-size: 2.2em; }
     .reveal h2 { font-size: 1.6em; }
     .reveal h3 { font-size: 1.2em; color: #8b949e; }
-    .reveal pre { font-size: 0.48em; margin: 6px 0; }
+    .reveal pre { font-size: 0.44em; margin: 4px 0; }
     .reveal code { font-size: 0.88em; }
-    .reveal section { text-align: left; }
-    .reveal section { overflow: hidden; }
+    .reveal section { text-align: left; overflow: hidden; }
     .reveal .center { text-align: center; }
-    .reveal ul { font-size: 0.78em; line-height: 1.4; margin: 4px 0; }
-    .reveal ol { font-size: 0.78em; line-height: 1.4; margin: 4px 0; }
-    .reveal p { font-size: 0.78em; line-height: 1.35; margin: 4px 0; }
-    .reveal h2 + p, .reveal h2 + pre, .reveal h2 + ul, .reveal h2 + ol { margin-top: 8px; }
+    .reveal ul { font-size: 0.75em; line-height: 1.3; margin: 3px 0; }
+    .reveal ol { font-size: 0.75em; line-height: 1.3; margin: 3px 0; }
+    .reveal p { font-size: 0.75em; line-height: 1.25; margin: 3px 0; }
+    .reveal h2 + p, .reveal h2 + pre, .reveal h2 + ul, .reveal h2 + ol { margin-top: 6px; }
     .reveal .small { font-size: 0.65em; color: #8b949e; }
     .reveal .highlight-box {
       background: rgba(88,166,255,0.1);
       border-left: 4px solid #58a6ff;
-      padding: 8px 16px;
-      margin: 10px 0;
+      padding: 6px 12px;
+      margin: 6px 0;
       border-radius: 4px;
-      font-size: 0.78em;
+      font-size: 0.72em;
     }
     .reveal .warn-box {
       background: rgba(255,166,87,0.1);
       border-left: 4px solid #ffa657;
-      padding: 8px 16px;
-      margin: 10px 0;
+      padding: 6px 12px;
+      margin: 6px 0;
       border-radius: 4px;
-      font-size: 0.78em;
+      font-size: 0.72em;
     }
     .reveal .green-box {
       background: rgba(63,185,80,0.1);
       border-left: 4px solid #3fb950;
-      padding: 8px 16px;
-      margin: 10px 0;
+      padding: 6px 12px;
+      margin: 6px 0;
       border-radius: 4px;
-      font-size: 0.78em;
+      font-size: 0.72em;
     }
-    .reveal table { font-size: 0.68em; margin: 10px auto; }
+    .reveal table { font-size: 0.65em; margin: 6px auto; }
     .reveal table th { background: rgba(88,166,255,0.15); color: #58a6ff; }
-    .reveal table td, .reveal table th { padding: 5px 12px; border: 1px solid #30363d; }
-    .two-col { display: flex; gap: 30px; align-items: flex-start; }
+    .reveal table td, .reveal table th { padding: 4px 10px; border: 1px solid #30363d; }
+    .two-col { display: flex; gap: 20px; align-items: flex-start; }
     .two-col > div { flex: 1; }
     .emoji { font-size: 1.4em; }
     .architecture-diagram {
@@ -77,17 +76,26 @@
       font-size: 0.7em;
     }
     .pipeline-arrow { color: #ffa657; font-size: 1.1em; margin: 0 2px; }
+    .slide-logo {
+      position: fixed;
+      top: 12px;
+      right: 20px;
+      z-index: 100;
+      height: 40px;
+      opacity: 0.9;
+    }
   </style>
 </head>
 <body>
 <div class="reveal">
+<img src="https://resmarksystems.atlassian.net/s/150dpd/b/0/5feb61c3a544023edb7e8493f8da26f5/_/jira-logo-scaled.png" alt="Resmark Systems" class="slide-logo">
 <div class="slides">
 
 <!-- ============================================================ -->
 <!-- SLIDE 1 — Title -->
 <!-- ============================================================ -->
 <section class="center">
-  <h1>🐦 Flap Bird AI</h1>
+  <h1>✈️ Flap Bird AI</h1>
   <h3>Real-Time Object Detection in the Browser<br>with YOLOv5 + TensorFlow.js</h3>
   <br>
   <p class="small">Engineering Meeting — March 2026</p>
@@ -262,19 +270,21 @@ loop()</code></pre>
   <h2>🎮 Game.js — The Orchestrator</h2>
   <div class="two-col">
     <div>
-      <h3>Responsibilities</h3>
-      <ul>
+      <h3 style="margin-bottom:2px;">Responsibilities</h3>
+      <ul style="font-size:0.70em; margin-top:2px;">
         <li>Manages <strong>Player</strong>, <strong>Obstacles[]</strong>, <strong>LevelManager</strong></li>
         <li>Spawns obstacles at intervals based on current level</li>
         <li>Runs collision detection every frame</li>
         <li>Draws all entities + HUD (score, level)</li>
         <li>Sends canvas snapshots to the Worker every 200 ms</li>
-        <li>Handles game over &amp; restart</li>
+        <li>Handles <strong>game over</strong> &amp; <strong>win condition</strong> (score ≥ 80)</li>
+        <li><strong>AI evasion</strong> — moves player based on YOLO detections</li>
+        <li><strong>Level-up announcements</strong> with colored fade-out text</li>
       </ul>
     </div>
     <div>
-      <h3>Constructor</h3>
-      <pre><code class="language-javascript">constructor(canvas, ctx, worker) {
+      <h3 style="margin-bottom:2px;">Constructor</h3>
+      <pre style="font-size:0.38em; margin-top:2px;"><code class="language-javascript">constructor(canvas, ctx, worker) {
   this.canvas = canvas
   this.ctx = ctx
   this.worker = worker
@@ -285,7 +295,12 @@ loop()</code></pre>
   this.frame = 0
   this.score = 0
   this.running = true
+  this.won = false           // Win state flag
   this.levelManager = new LevelManager()
+  this.predictions = []      // YOLO bounding boxes
+  this.holdUntil = 0         // AI hold position
+  this.holdY = null
+  this.levelAnnounce = null  // Level-up display
   new Input(this.player)
   this.setupWorker()
 }</code></pre>
@@ -298,26 +313,40 @@ loop()</code></pre>
 <!-- ============================================================ -->
 <section>
   <h2>🎮 Game.js — update()</h2>
-  <pre><code class="language-javascript">update() {
+  <pre style="font-size:0.40em;"><code class="language-javascript">update() {
   if (!this.running) return
   this.frame++
-  this.player.update()                                      // Apply gravity
+  // AI hold system: keep player at target Y after evasion
+  if (this.holdY !== null && performance.now() < this.holdUntil) {
+    this.player.y = this.holdY; this.player.vy = 0
+  } else { this.holdY = null; this.player.update() }
   if (this.frame % this.levelManager.spawnRate() === 0) this.spawn()
 
-  for (let i = this.obstacles.length - 1; i >= 0; i--) {    // Backwards loop!
+  for (let i = this.obstacles.length - 1; i >= 0; i--) {   // Backwards loop!
     let o = this.obstacles[i]
     o.update(this.levelManager.speed())
-    if (collide(this.player, o)) this.gameOver()
-    if (o.x + o.w < 0) {                                    // Off-screen
-      this.obstacles.splice(i, 1)
-      this.score++
-      this.levelManager.update(this.score)
+    if (collide(this.player, o)) { this.gameOver(); return }
+    if (o.x + o.w < 0) {                                   // Off-screen
+      this.obstacles.splice(i, 1); this.score++
+      if (this.levelManager.update(this.score))             // Level up?
+        this.levelAnnounce = { level: this.levelManager.level, startTime: performance.now() }
+      if (this.score >= 80) { this.youWin(); return }       // 🏆 Win!
     }
   }
 }</code></pre>
-  <div class="warn-box">
-    <strong>Why iterate backwards?</strong> <code>splice(i, 1)</code> shifts indices.
-    Iterating backwards (i--) prevents skipping elements.
+  <div class="two-col">
+    <div>
+      <div class="warn-box">
+        <strong>Why iterate backwards?</strong> <code>splice(i, 1)</code> shifts indices.
+        Iterating backwards (i--) prevents skipping elements.
+      </div>
+    </div>
+    <div>
+      <div class="green-box">
+        <strong>Win condition:</strong> At score ≥ 80 (8 levels × 10 obstacles),
+        <code>youWin()</code> stops the game and shows a golden "YOU WIN" overlay.
+      </div>
+    </div>
   </div>
 </section>
 
@@ -327,7 +356,7 @@ loop()</code></pre>
 <section>
   <h2>🎮 Game.js — draw()</h2>
   <p>Redraws the entire scene every frame. <strong>Order matters</strong> — later draws appear on top.</p>
-  <pre><code class="language-javascript">draw() {
+  <pre style="font-size:0.40em;"><code class="language-javascript">draw() {
   this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height) // 1. Clear
   if (this.bg.complete)                                           // 2. Background
     this.ctx.drawImage(this.bg, 0, 0, this.canvas.width, this.canvas.height)
@@ -337,10 +366,16 @@ loop()</code></pre>
   this.ctx.font = "20px Arial"
   this.ctx.fillText("Score: " + this.score, 10, 25)
   this.ctx.fillText("Level: " + this.levelManager.level, 10, 50)
-  if (!this.running) this.drawGameOver()          // 6. Game Over overlay
+  this.drawPredictions()                          // 6. YOLO bounding boxes
+  this.drawLevelAnnounce()                        // 7. Level-up announcement
+  if (!this.running) {                            // 8. End-game overlay
+    if (this.won) this.drawYouWin()               //    🏆 Gold "YOU WIN"
+    else this.drawGameOver()                      //    🔴 Red "GAME OVER"
+  }
 }</code></pre>
   <div class="highlight-box">
-    <strong>Canvas 2D</strong> is immediate-mode — nothing retained between frames. Redraw everything each time.
+    <strong>Canvas 2D</strong> is immediate-mode — nothing retained between frames.
+    Includes <strong>YOLO bbox overlay</strong>, <strong>level-up announcements</strong>, and <strong>win/lose screens</strong>.
   </div>
 </section>
 
@@ -349,25 +384,84 @@ loop()</code></pre>
 <!-- ============================================================ -->
 <section>
   <h2>🎮 Game.js — Worker Communication</h2>
-  <pre><code class="language-javascript">setupWorker() {
+  <pre style="font-size:0.38em;"><code class="language-javascript">setupWorker() {
   this.worker.onmessage = (e) => {
-    if (e.data.type === 'ready')  console.log('[Game] Worker ready')
-    if (e.data.type === 'action' && e.data.action === 'jump') this.player.jump()
+    const { type } = e.data
+    if (type === 'ready') console.log('[Game] Worker pronto')
+    if (type === 'action' && e.data.action === 'jump') this.player.jump()
+    if (type === 'predictionResult') {
+      this.predictions.push({ label: e.data.label, confidence: e.data.confidence,
+        bbox: e.data.bbox, timestamp: performance.now() })
+      this.predictions = this.predictions.filter(p => performance.now() - p.timestamp < 500)
+      this.makeAirplaneMoveAwayObstacles(e.data)  // AI evasion!
+    }
   }
   // Send canvas snapshot to Worker every 200ms
   this.snapshotInterval = setInterval(async () => {
     if (!this.running) return
     const bitmap = await createImageBitmap(this.canvas)
     this.worker.postMessage({ type: 'predict', image: bitmap }, [bitmap])
-    this.worker.postMessage({
-      type: 'gameState',
-      state: { player, obstacles, score, level }
-    })
   }, 200)
 }</code></pre>
-  <div class="green-box">
-    <strong>Transferable Objects:</strong> The second argument <code>[bitmap]</code> transfers ownership
-    to the Worker — zero-copy, no serialization overhead.
+  <div class="two-col">
+    <div>
+      <div class="green-box">
+        <strong>Transferable Objects:</strong> <code>[bitmap]</code> transfers ownership
+        to the Worker — zero-copy, no serialization overhead.
+      </div>
+    </div>
+    <div>
+      <div class="warn-box">
+        <strong>New:</strong> <code>predictionResult</code> now stores bounding boxes
+        for visual debug <strong>and</strong> triggers <code>makeAirplaneMoveAwayObstacles()</code>.
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<!-- SLIDE 12b — AI Evasion & Win/Lose Screens -->
+<!-- ============================================================ -->
+<section>
+  <h2>🤖 Game.js — AI Evasion &amp; Win/Lose</h2>
+  <div class="two-col">
+    <div>
+      <h3>AI Obstacle Evasion</h3>
+      <pre style="font-size:0.38em;"><code class="language-javascript">makeAirplaneMoveAwayObstacles(prediction) {
+  if (prediction.label !== 'clock') return
+  const obstX = prediction.bbox[0]
+  const obstY = prediction.bbox[1]
+  if (obstX < this.player.x ||
+      obstX - this.player.x > 300) return
+  let targetY = /* check above/below */
+  targetY = Math.max(10, Math.min(340, targetY))
+  this.player.y = targetY
+  this.holdY = targetY  // Hold position 1s
+  this.holdUntil = performance.now() + 1000
+}</code></pre>
+    </div>
+    <div>
+      <h3>Game Over &amp; You Win</h3>
+      <pre style="font-size:0.38em;"><code class="language-javascript">drawGameOver() {  // 🔴 Red overlay
+  ctx.fillStyle = "rgba(0,0,0,0.7)"
+  ctx.fillRect(0, 0, w, h)
+  ctx.fillStyle = "#FF0000"
+  ctx.fillText("GAME OVER", cx, cy)
+}
+drawYouWin() {    // 🏆 Gold overlay
+  ctx.fillStyle = "rgba(0,0,0,0.7)"
+  ctx.fillRect(0, 0, w, h)
+  ctx.fillStyle = "#FFD700"
+  ctx.fillText("YOU WIN", cx, cy)
+  ctx.fillText("Congratulations!", cx, cy+55)
+}
+youWin() { this.running = false; this.won = true }</code></pre>
+    </div>
+  </div>
+  <div class="highlight-box">
+    <strong>AI loop:</strong> YOLO detects obstacles → Worker sends <code>predictionResult</code> →
+    Game moves player → holds 1s → resumes physics.
+    After 80 obstacles (all 8 levels), golden <strong>"YOU WIN"</strong> appears!
   </div>
 </section>
 
@@ -375,7 +469,7 @@ loop()</code></pre>
 <!-- SLIDE 13a — Player.js Code -->
 <!-- ============================================================ -->
 <section>
-  <h2>🐤 Player.js — The Bird</h2>
+  <h2>✈️  Player.js — The Bird</h2>
   <div class="two-col">
     <div>
       <pre><code class="language-javascript">class Player {
@@ -541,7 +635,7 @@ loop()</code></pre>
   <h2>📈 LevelManager.js — Difficulty Progression</h2>
   <div class="two-col">
     <div>
-      <pre><code class="language-javascript">class LevelManager {
+      <pre style="font-size:0.38em;"><code class="language-javascript">class LevelManager {
   constructor() {
     this.level = 1
     this.levels = [
@@ -571,9 +665,8 @@ loop()</code></pre>
         <tr><td>8</td><td>7 px/f</td><td>50 f</td><td>~0.8 s</td></tr>
       </table>
       <div class="warn-box">
-        Every <strong>10 points</strong> → level up.<br>
-        Higher level = faster obstacles + more frequent spawns.
-        This is a common <strong>difficulty curve</strong> pattern.
+        Every <strong>10 points</strong> → level up. Higher level = faster obstacles + more frequent spawns.
+        Classic <strong>difficulty curve</strong> pattern.
       </div>
     </div>
   </div>
@@ -613,13 +706,13 @@ loop()</code></pre>
     <li><strong>2021</strong> — <strong>YOLOv5</strong> by Ultralytics (Glenn Jocher). First YOLO in PyTorch.</li>
     <li><strong>2023-2025</strong> — YOLOv8, v9, v10, v11 by various teams</li>
   </ul>
-  <div class="highlight-box">
+  <div class="highlight-box" style="margin:4px 0;">
     Unlike R-CNN (multi-pass), YOLO processes the entire image in a <strong>single forward pass</strong>.
   </div>
   <div class="two-col">
     <div>
-      <h3>How It Works</h3>
-      <ol>
+      <h3 style="margin-bottom:2px;">How It Works</h3>
+      <ol style="margin-top:2px;">
         <li>Divide image into <strong>S×S grid</strong></li>
         <li>Each cell predicts <strong>B boxes</strong> + confidence</li>
         <li>Each cell predicts <strong>C class probabilities</strong></li>
@@ -627,8 +720,8 @@ loop()</code></pre>
       </ol>
     </div>
     <div>
-      <h3>YOLOv5 Variants</h3>
-      <table>
+      <h3 style="margin-bottom:2px;">YOLOv5 Variants</h3>
+      <table style="margin-top:2px;">
         <tr><th>Model</th><th>Params</th><th>Speed</th></tr>
         <tr><td><strong>v5n (nano) ← ours</strong></td><td>1.9M</td><td>Fastest</td></tr>
         <tr><td>v5s (small)</td><td>7.2M</td><td>Fast</td></tr>
@@ -742,7 +835,7 @@ loop()</code></pre>
 <!-- ============================================================ -->
 <section>
   <h2>🧠 GameWorker.js — Model Loading</h2>
-  <pre><code class="language-javascript">importScripts('https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest')
+  <pre style="font-size:0.40em;"><code class="language-javascript">importScripts('https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest')
 const MODEL_PATH = '../machine-learning/yolov5n_web_model/model.json'
 const LABELS_PATH = '../machine-learning/yolov5n_web_model/labels.json'
 
@@ -767,7 +860,7 @@ async function loadModelYOLOv5AndItsLabels() {
 <!-- ============================================================ -->
 <section>
   <h2>🧠 GameWorker.js — Image Preprocessing</h2>
-  <pre><code class="language-javascript">function createAndFormatImageTensor(image) {
+  <pre style="font-size:0.40em;"><code class="language-javascript">function createAndFormatImageTensor(image) {
   return tf.tidy(() => {                                // Auto-dispose intermediates
     const tensorImage = tf.browser.fromPixels(image)    // [400, 800, 3] H×W×RGB
     return tf.image
@@ -798,7 +891,7 @@ async function loadModelYOLOv5AndItsLabels() {
 <!-- ============================================================ -->
 <section>
   <h2>🧠 GameWorker.js — Running Inference</h2>
-  <pre><code class="language-javascript">async function runYoloModelOverTensorAndGetDetections(tensor) {
+  <pre style="font-size:0.40em;"><code class="language-javascript">async function runYoloModelOverTensorAndGetDetections(tensor) {
   const output = await _model.executeAsync(tensor)     // 1. Run model
   tf.dispose(tensor)                                   // 2. Free input
 
@@ -823,7 +916,7 @@ async function loadModelYOLOv5AndItsLabels() {
 <!-- ============================================================ -->
 <section>
   <h2>🧠 GameWorker.js — Processing Predictions</h2>
-  <pre><code class="language-javascript">// Generator function — yields predictions one at a time
+  <pre style="font-size:0.40em;"><code class="language-javascript">// Generator function — yields predictions one at a time
 function* processPrediction({ boxes, scores, classes }, width, height) {
   for (let index = 0; index < scores.length; index++) {
     if (scores[index] < CLASS_THRESHOLD) continue  // Filter low confidence
@@ -857,7 +950,7 @@ function* processPrediction({ boxes, scores, classes }, width, height) {
 <!-- ============================================================ -->
 <section>
   <h2>🧠 GameWorker.js — Message Handler</h2>
-  <pre><code class="language-javascript">self.postMessage({ type: 'ready' })        // Signal: worker is alive
+  <pre style="font-size:0.40em;"><code class="language-javascript">self.postMessage({ type: 'ready' })        // Signal: worker is alive
 
 self.onmessage = async (e) => {
   const { type } = e.data
@@ -959,7 +1052,7 @@ loadModelYOLOv5AndItsLabels()</code></pre>
 <section>
   <h2>🔄 Complete Data Flow</h2>
   <div class="architecture-diagram">
-    <pre style="color:#c9d1d9; font-size:0.8em; line-height:1.5;">
+    <pre style="color:#c9d1d9; font-size:0.75em; line-height:1.4;">
   ┌────────────────── MAIN THREAD ──────────────────┐
   │  Keyboard ──▶ Input.js ──▶ Player.jump()        │
   │                                                  │
@@ -1000,6 +1093,7 @@ loadModelYOLOv5AndItsLabels()</code></pre>
           <li><strong>tf.tidy() + dispose()</strong> — GPU memory mgmt</li>
           <li><strong>Generator</strong> — lazy, memory-efficient</li>
           <li><strong>ES Modules</strong> — no build step</li>
+          <li><strong>Autonomous agent</strong> — YOLO detections drive AI evasion</li>
         </ul>
       </div>
     </div>
@@ -1007,11 +1101,10 @@ loadModelYOLOv5AndItsLabels()</code></pre>
       <div class="warn-box">
         <strong>🔮 Future opportunities</strong>
         <ul>
-          <li>Build an <strong>autonomous agent</strong> from gameState + detections</li>
-          <li>Fine-tune YOLOv5 on game sprites</li>
-          <li><strong>OffscreenCanvas</strong> for Worker rendering</li>
-          <li><strong>Reinforcement Learning</strong> (Q-learning / NEAT)</li>
-          <li>Bounding box overlay for debug</li>
+          <li><strong>Fine-tune YOLOv5</strong> — retrain the model on actual game sprites so it recognizes "player" and "obstacle" instead of guessing "stop sign" or "surfboard"</li>
+          <li><strong>OffscreenCanvas</strong> — render directly inside the Worker thread, eliminating main-thread canvas access entirely</li>
+          <li><strong>Reinforcement Learning</strong> — replace hand-coded rules with a self-learning agent (Q-learning / NEAT) that improves by playing thousands of games</li>
+          <li><strong>Bounding box overlay</strong> — draw YOLO detection rectangles on the canvas in real time for visual debugging</li>
         </ul>
       </div>
     </div>
@@ -1027,7 +1120,7 @@ loadModelYOLOv5AndItsLabels()</code></pre>
   <div class="two-col">
     <div>
       <h3>Approach 1: Rule-Based</h3>
-      <pre><code class="language-javascript">if (type === 'gameState') {
+      <pre style="font-size:0.38em;"><code class="language-javascript">if (type === 'gameState') {
   const { player, obstacles } = state
   const nearest = obstacles
     .filter(o => o.x > player.x)
@@ -1041,7 +1134,7 @@ loadModelYOLOv5AndItsLabels()</code></pre>
     </div>
     <div>
       <h3>Approach 2: Vision-Based</h3>
-      <pre><code class="language-javascript">// Using YOLO detections:
+      <pre style="font-size:0.38em;"><code class="language-javascript">// Using YOLO detections:
 // 1. Find player bounding box
 // 2. Find nearest obstacle box
 // 3. Compare Y positions → jump?

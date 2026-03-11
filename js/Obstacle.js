@@ -27,17 +27,27 @@ export default class Obstacle {
 
     this.sprite = new Image()
     this.sprite.src = "./assets/obstacle.png"
+
+    this.angle = Math.random() * Math.PI * 2
+    this.rotationSpeed = (Math.random() * 0.04 + 0.02) * (Math.random() < 0.5 ? 1 : -1)
   }
 
-  // update — Move o obstáculo para a esquerda na velocidade recebida do LevelManager
+  // update — Move o obstáculo para a esquerda e rotaciona
   update(speed) {
     this.x -= speed
+    this.angle += this.rotationSpeed
   }
 
-  // draw — Desenha o sprite do meteoro na posição atual (sem rotação, alinhado à hitbox AABB)
+  // draw — Desenha o sprite do meteoro rotacionado em torno do seu centro
   draw(ctx) {
     if (this.sprite.complete) {
-      ctx.drawImage(this.sprite, this.x, this.y, this.w, this.h)
+      const cx = this.x + this.w / 2
+      const cy = this.y + this.h / 2
+      ctx.save()
+      ctx.translate(cx, cy)
+      ctx.rotate(this.angle)
+      ctx.drawImage(this.sprite, -this.w / 2, -this.h / 2, this.w, this.h)
+      ctx.restore()
     }
   }
 
