@@ -146,9 +146,9 @@ function* processPrediction({ boxes, scores, classes, numDetections }, width, he
         //No nosso desenho, identificou os obstaculos como "stop sign" ou "clock"
         //E a nave (player) como "kite" ou "airplane"
         const label = _labels[classes[index]]
-        console.log(`[Worker] Detecção: ${label} (confiança: ${scores[index].toFixed(2)})`)
+        //console.log(`[Worker] Detecção: ${label} (confiança: ${scores[index].toFixed(2)})`)
 
-        if (!['airplane', 'clock', 'stop sign', 'kite'].includes(label.toLowerCase())) continue; 
+        if (!['airplane', 'clock'].includes(label.toLowerCase())) continue; 
 
         //Se vc abrir o array de boxes, vc vai perceber que todos os outros elementos nas posições diferentes do numDetections são lixo e devem ser ignorados. Por isso o limit = numDetections
         let [x1, y1, x2, y2] = boxes.slice(index * 4, (index + 1) * 4) //cada box tem 4 dimensões
@@ -220,10 +220,11 @@ async function handlePredictEvent(e) {
     try {
       const inferenceResults = await runYoloModelOverTensorAndGetDetections(input)
       for (const prediction of processPrediction(inferenceResults, width, height)) {
-        //para cada resultado, emito
+        //para cada resultado, emito (inclui sentAt para compensação de movimento)
           postMessage({
               type: 'predictionResult',
-              ...prediction
+              ...prediction,
+              sentAt: e.data.sentAt
           });
       }
     } catch (err) {

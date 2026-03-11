@@ -23,6 +23,7 @@ import Obstacle from "./Obstacle.js"       // Classe dos obstáculos
 import LevelManager from "./LevelManager.js" // Gerenciador de níveis/dificuldade
 import collide from "./Collision.js"       // Função de detecção de colisão AABB
 import Input from "./Input.js"             // Gerenciador de entrada do teclado
+import Evasion from "./Evasion.js"         // Lógica de evasão da IA
 
 export default class Game {
 
@@ -64,6 +65,8 @@ export default class Game {
 
     new Input(this.player) // Registra os controles do teclado (Espaço → pulo)
 
+    this.evasion = new Evasion(this) // Lógica de evasão da IA (YOLO + safety nets)
+
     this.setupWorker() // Configura comunicação com o Worker
 
     // Mostra "LEVEL 1" ao iniciar o jogo
@@ -91,15 +94,16 @@ export default class Game {
          label: e.data.label,
           confidence: e.data.confidence,
           bbox: e.data.bbox,
+          snapshotTime: e.data.sentAt || performance.now(), // tempo real do snapshot
           timestamp: performance.now()
         })
-        // Remove predições antigas (> 500ms) para não acumular
+        // Remove predições antigas (> 1000ms) para não acumular
         const now = performance.now()
-        this.predictions = this.predictions.filter(p => now - p.timestamp < 500)
+        this.predictions = this.predictions.filter(p => now - p.timestamp < 1000)
         //Fim desenho na tela
 
         //Metodo que faz a IA jogar sozinha usando as predições do modelo YOLO para detectar os obstáculos e mover o player para evitar colidir com eles
-        this.makeAirplaneMoveAwayObstacles(e.data);
+        this.evasion.makeAirplaneMoveAwayObstacles(e.data);
       }
     }
 
@@ -107,9 +111,10 @@ export default class Game {
     this.snapshotInterval = setInterval(async () => {
       if (!this.running) return
 
-      // Captura o canvas como ImageBitmap e envia ao Worker
+      // Captura o canvas como ImageBitmap e envia ao Worker com timestamp do snapshot
+      const sentAt = performance.now()
       const bitmap = await createImageBitmap(this.canvas)
-      this.worker.postMessage({ type: 'predict', image: bitmap }, [bitmap])
+      this.worker.postMessage({ type: 'predict', image: bitmap, sentAt }, [bitmap])
     }, 200)
   }
 
@@ -137,10 +142,15 @@ export default class Game {
 
     // Se fixedY está ativo, trava o player na posição segura; senão, atualiza normalmente
     if (this.fixedY !== null) {
+      // Revalida fixedY a cada frame: verifica se a posição ainda é segura segundo as predições YOLO
+      this.evasion.revalidateFixedY()
       this.player.y = this.fixedY
       this.player.vy = 0
     } else {
       this.player.update()
+      // Segurança frame-a-frame: se após o update normal o player vai colidir com um obstáculo
+      // próximo, aciona evasão de emergência usando posições reais (sem esperar YOLO)
+      this.evasion.emergencyEvade()
     }
 
     // Verifica se é hora de criar um novo obstáculo (a cada spawnRate frames)
@@ -148,11 +158,18 @@ export default class Game {
       this.spawn() // Cria e adiciona um novo obstáculo
     }
 
+    // Primeiro: move todos os obstáculos para as posições atuais
+    for (const o of this.obstacles) {
+      o.update(this.levelManager.speed())
+    }
+
+    // Safety net: última linha de defesa contra imprecisão do YOLO
+    // Verifica obstáculos REAIS após movê-los e antes de checar colisão
+    this.evasion.lastResortEvade()
+
     // Percorre obstáculos de trás para frente (i--) para poder remover com splice sem pular índices
     for (let i = this.obstacles.length - 1; i >= 0; i--) {
       let o = this.obstacles[i]
-
-      o.update(this.levelManager.speed()) // Move o obstáculo para a esquerda na velocidade do nível
 
       if (collide(this.player, o)) { // Testa colisão jogador ↔ obstáculo
         console.log('====== Bateu obstaculo x '+o.x+' y '+o.y+ ' Player x '+this.player.x+' y '+this.player.y);
@@ -217,7 +234,7 @@ export default class Game {
     this.ctx.fillText("Level: " + this.levelManager.level, 10, 50)
 
     // Desenha bounding boxes das detecções YOLO (retângulos vermelhos)
-    this.drawPredictions();
+    //this.drawPredictions();
 
     // Desenha anúncio de level up (se ativo)
     this.drawLevelAnnounce()
@@ -401,77 +418,4 @@ export default class Game {
     this.ctx.textAlign = "left"
   }
 
-  //Esse metodo pega os resultados das predições e move o airplane evitando colidir com os obstaculos
-  makeAirplaneMoveAwayObstacles(prediction) {
-    if (prediction.label !== 'clock') {
-      this.releaseFixedY()
-      return
-    }
-
-    const obstacle = this.parseBBox(prediction.bbox)
-
-    if (!this.isInDangerZone(obstacle) || !this.willCollideVertically(obstacle)) {
-      this.releaseFixedY()
-      return
-    }
-
-    this.fixedY = this.calcSafeY(obstacle)
-  }
-
-  // Extrai as bordas e tamanho do obstáculo a partir do bbox da predição
-  parseBBox(bbox) {
-    const x1 = bbox[0], y1 = bbox[1], x2 = bbox[2], y2 = bbox[3]
-    const w = x2 - x1, h = y2 - y1
-    const size = Math.max(w, h) // maior dimensão do obstáculo
-    return { x1, y1, x2, y2, w, h, size }
-  }
-
-  // Verifica se o obstáculo está próximo o suficiente do player para reagir
-  // Quanto maior o obstáculo, maior a zona de perigo
-  isInDangerZone(obs) {
-    const margin = 60 + obs.size * 0.5
-    const dangerZone = 200 + obs.size * 1.5
-    const playerRight = this.player.x + this.player.w
-    return obs.x1 <= playerRight + dangerZone && obs.x2 >= this.player.x - margin
-  }
-
-  // Verifica se há risco de colisão no eixo vertical
-  willCollideVertically(obs) {
-    const margin = 60 + obs.size * 0.5
-    return this.player.y < obs.y2 + margin &&
-           this.player.y + this.player.h > obs.y1 - margin
-  }
-
-  // Calcula a posição Y segura para desviar do obstáculo
-  calcSafeY(obs) {
-    const margin = 60 + obs.size * 0.5
-    const spaceAbove = obs.y1
-    const spaceBelow = this.canvas.height - obs.y2
-
-    let targetY
-    if (spaceAbove >= spaceBelow) {
-      targetY = obs.y1 - this.player.h - margin
-    } else {
-      targetY = obs.y2 + margin
-    }
-
-    return Math.max(0, Math.min(350, targetY))
-  }
-
-  // releaseFixedY — Libera o fixedY quando nenhum obstáculo está perto ou se aproximando do player
-  releaseFixedY() {
-    if (this.fixedY === null) return
-
-    // Margem larga à direita (150px) para cobrir o deslocamento do obstáculo entre predições (200ms)
-    const obstaclePassando = this.obstacles.some(o =>
-      o.x < this.player.x + this.player.w + 150 &&
-      o.x + o.w > this.player.x - 30
-    )
-
-    if (!obstaclePassando) {
-      this.fixedY = null
-    }
-  }
-
-  
 }

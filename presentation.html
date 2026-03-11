@@ -149,6 +149,7 @@
 │          Player.js      Obstacle.js    LevelManager  │
 │               └───────┬───────┘           .js        │
 │                  Collision.js   Input.js (keyboard)  │
+│                  Evasion.js  (AI evasion logic)      │
 │                                                      │
 │  ─ ─ ─ ─ ─ ─ ─ postMessage() ─ ─ ─ ─ ─ ─ ─ ─ ─ ─  │
 │  ┌────────────────────────────────────────────────┐  │
@@ -198,6 +199,7 @@
 │   ├── Obstacle.js             ← Obstacle spawning & movement
 │   ├── Collision.js            ← AABB collision detection
 │   ├── Input.js                ← Keyboard event handler
+│   ├── Evasion.js              ← AI evasion logic (YOLO-based)
 │   ├── LevelManager.js         ← Difficulty progression (8 levels)
 │   └── GameWorker.js           ← Web Worker: loads & runs YOLOv5
 └── machine-learning/
@@ -272,13 +274,13 @@ loop()</code></pre>
     <div>
       <h3 style="margin-bottom:2px;">Responsibilities</h3>
       <ul style="font-size:0.70em; margin-top:2px;">
-        <li>Manages <strong>Player</strong>, <strong>Obstacles[]</strong>, <strong>LevelManager</strong></li>
+        <li>Manages <strong>Player</strong>, <strong>Obstacles[]</strong>, <strong>LevelManager</strong>, <strong>Evasion</strong></li>
         <li>Spawns obstacles at intervals based on current level</li>
         <li>Runs collision detection every frame</li>
         <li>Draws all entities + HUD (score, level)</li>
         <li>Sends canvas snapshots to the Worker every 200 ms</li>
         <li>Handles <strong>game over</strong> &amp; <strong>win condition</strong> (score ≥ 80)</li>
-        <li><strong>AI evasion</strong> — moves player based on YOLO detections</li>
+        <li>Delegates <strong>AI evasion</strong> to <code>Evasion.js</code></li>
         <li><strong>Level-up announcements</strong> with colored fade-out text</li>
       </ul>
     </div>
@@ -295,12 +297,14 @@ loop()</code></pre>
   this.frame = 0
   this.score = 0
   this.running = true
-  this.won = false           // Win state flag
+  this.won = false
   this.levelManager = new LevelManager()
   this.predictions = []      // YOLO bounding boxes
   this.fixedY = null         // AI evasion lock
   this.levelAnnounce = null  // Level-up display
+  this.levelColors = ['#00FF88', '#00BFFF', ...]
   new Input(this.player)
+  this.evasion = new Evasion(this) // AI evasion
   this.setupWorker()
 }</code></pre>
     </div>
@@ -315,21 +319,27 @@ loop()</code></pre>
   <pre style="font-size:0.40em;"><code class="language-javascript">update() {
   if (!this.running) return
   this.frame++
-  // AI evasion: if fixedY is set, lock player position; otherwise normal physics
+  // AI evasion: if fixedY is set, lock player; otherwise normal physics
   if (this.fixedY !== null) {
+    this.evasion.revalidateFixedY()       // Re-check safety each frame
     this.player.y = this.fixedY; this.player.vy = 0
-  } else { this.player.update() }
+  } else {
+    this.player.update()
+    this.evasion.emergencyEvade()          // Emergency: frame-by-frame check
+  }
   if (this.frame % this.levelManager.spawnRate() === 0) this.spawn()
 
-  for (let i = this.obstacles.length - 1; i >= 0; i--) {   // Backwards loop!
+  for (const o of this.obstacles) o.update(this.levelManager.speed())
+  this.evasion.lastResortEvade()          // Last resort using YOLO predictions
+
+  for (let i = this.obstacles.length - 1; i >= 0; i--) {
     let o = this.obstacles[i]
-    o.update(this.levelManager.speed())
     if (collide(this.player, o)) { this.gameOver(); return }
-    if (o.x + o.w < 0) {                                   // Off-screen
+    if (o.x + o.w < 0) {
       this.obstacles.splice(i, 1); this.score++
-      if (this.levelManager.update(this.score))             // Level up?
+      if (this.levelManager.update(this.score))
         this.levelAnnounce = { level: this.levelManager.level, startTime: performance.now() }
-      if (this.score >= 80) { this.youWin(); return }       // 🏆 Win!
+      if (this.score >= 80) { this.youWin(); return }
     }
   }
 }</code></pre>
@@ -342,8 +352,9 @@ loop()</code></pre>
     </div>
     <div>
       <div class="green-box">
-        <strong>Win condition:</strong> At score ≥ 80 (8 levels × 10 obstacles),
-        <code>youWin()</code> stops the game and shows a golden "YOU WIN" overlay.
+        <strong>3-tier evasion:</strong> <code>revalidateFixedY()</code> keeps lock safe,
+        <code>emergencyEvade()</code> reacts frame-by-frame, and
+        <code>lastResortEvade()</code> is the final safety net — all via YOLO predictions.
       </div>
     </div>
   </div>
@@ -360,12 +371,12 @@ loop()</code></pre>
   if (this.bg.complete)                                           // 2. Background
     this.ctx.drawImage(this.bg, 0, 0, this.canvas.width, this.canvas.height)
   this.player.draw(this.ctx)                     // 3. Player
-  for (let o of this.obstacles) o.draw(this.ctx)  // 4. Obstacles
+  for (let o of this.obstacles) o.draw(this.ctx)  // 4. Obstacles (with rotation)
   this.ctx.fillStyle = "white"                   // 5. HUD
   this.ctx.font = "20px Arial"
   this.ctx.fillText("Score: " + this.score, 10, 25)
   this.ctx.fillText("Level: " + this.levelManager.level, 10, 50)
-  this.drawPredictions()                          // 6. YOLO bounding boxes
+  // this.drawPredictions()                       // 6. YOLO bboxes (debug toggle)
   this.drawLevelAnnounce()                        // 7. Level-up announcement
   if (!this.running) {                            // 8. End-game overlay
     if (this.won) this.drawYouWin()               //    🏆 Gold "YOU WIN"
@@ -374,7 +385,7 @@ loop()</code></pre>
 }</code></pre>
   <div class="highlight-box">
     <strong>Canvas 2D</strong> is immediate-mode — nothing retained between frames.
-    Includes <strong>YOLO bbox overlay</strong>, <strong>level-up announcements</strong>, and <strong>win/lose screens</strong>.
+    Includes optional <strong>YOLO bbox overlay</strong> (commented out), <strong>level-up announcements</strong> with colored fade-out, and <strong>win/lose screens</strong>.
   </div>
 </section>
 
@@ -390,14 +401,20 @@ loop()</code></pre>
     if (type === 'action' && e.data.action === 'jump') this.player.jump()
     if (type === 'predictionResult') {
       this.predictions.push({ label: e.data.label, confidence: e.data.confidence,
-        bbox: e.data.bbox, timestamp: performance.now() })
-      this.predictions = this.predictions.filter(p => performance.now() - p.timestamp < 500)
-      this.makeAirplaneMoveAwayObstacles(e.data)  // AI evasion!
+        bbox: e.data.bbox, snapshotTime: e.data.sentAt || performance.now(),
+        timestamp: performance.now() })
+      this.predictions = this.predictions.filter(p => performance.now() - p.timestamp < 1000)
+      this.evasion.makeAirplaneMoveAwayObstacles(e.data)  // AI evasion!
     }
   }
   // Send canvas snapshot to Worker every 200ms
   this.snapshotInterval = setInterval(async () => {
     if (!this.running) return
+    const sentAt = performance.now()
+    const bitmap = await createImageBitmap(this.canvas)
+    this.worker.postMessage({ type: 'predict', image: bitmap, sentAt }, [bitmap])
+  }, 200)
+}</code></pre>
     const bitmap = await createImageBitmap(this.canvas)
     this.worker.postMessage({ type: 'predict', image: bitmap }, [bitmap])
   }, 200)
@@ -411,68 +428,71 @@ loop()</code></pre>
     </div>
     <div>
       <div class="warn-box">
-        <strong>New:</strong> <code>predictionResult</code> now stores bounding boxes
-        for visual debug <strong>and</strong> triggers <code>makeAirplaneMoveAwayObstacles()</code>.
+        <strong>Latency compensation:</strong> <code>sentAt</code> timestamp is sent with each snapshot
+        so <code>Evasion.js</code> can compensate for how far obstacles moved during inference.
       </div>
     </div>
   </div>
 </section>
 
 <!-- ============================================================ -->
-<!-- SLIDE 12b — AI Evasion & Win/Lose Screens -->
+<!-- SLIDE 12b — Evasion.js (dedicated AI class) -->
 <!-- ============================================================ -->
 <section>
-  <h2>🤖 Game.js — AI Evasion &amp; Win/Lose</h2>
+  <h2>🤖 Evasion.js — AI Evasion (Dedicated Class)</h2>
   <div class="two-col">
     <div>
-      <h3>AI Obstacle Evasion (5 métodos)</h3>
-      <pre style="font-size:0.34em;"><code class="language-javascript">makeAirplaneMoveAwayObstacles(prediction) {
-  if (prediction.label !== 'clock') { this.releaseFixedY(); return }
+      <h3>3-Tier Evasion System (YOLO-only)</h3>
+      <pre style="font-size:0.34em;"><code class="language-javascript">// Tier 1: YOLO prediction triggers evasion
+makeAirplaneMoveAwayObstacles(prediction) {
+  if (!['clock','stop sign'].includes(prediction.label))
+    return  // Player labels (kite/airplane) → ignore, don't release
   const obs = this.parseBBox(prediction.bbox)
+  // Compensate latency since snapshot was taken
+  const elapsed = (performance.now() - snapshotTime) / 1000
+  obs.x1 -= speed * 60 * elapsed
   if (!this.isInDangerZone(obs) || !this.willCollideVertically(obs)) {
     this.releaseFixedY(); return
   }
-  this.fixedY = this.calcSafeY(obs)
+  let safeY = this.calcSafeY(obs)
+  if (!this.isPositionSafeFromPredictions(safeY))
+    safeY = this.findSafeYFromPredictions()
+  this.fixedY = safeY
 }
-parseBBox(bbox) { // extracts x1,y1,x2,y2,w,h,size }
-isInDangerZone(obs) {
-  const margin = 60 + obs.size * 0.5
-  const dangerZone = 200 + obs.size * 1.5
-  return obs.x1 <= playerRight + dangerZone && obs.x2 >= player.x - margin
-}
-willCollideVertically(obs) {
-  const margin = 60 + obs.size * 0.5
-  return player.y < obs.y2 + margin && player.y + player.h > obs.y1 - margin
-}
-calcSafeY(obs) {  // picks above or below based on available space
-  const margin = 60 + obs.size * 0.5
-  return spaceAbove >= spaceBelow ? obs.y1 - h - margin : obs.y2 + margin
-}
-releaseFixedY() { // releases only when no obstacle within 150px }</code></pre>
+// Tier 2: Emergency (speed-scaled: 120 + speed*15 px)
+emergencyEvade() { /* e.g. speed 7 → 225px range */ }
+// Tier 3: Last resort (speed-scaled: 40 + speed*8 px)
+lastResortEvade() { /* iterates getObstaclePredictions() */ }</code></pre>
     </div>
     <div>
-      <h3>Game Over &amp; You Win</h3>
-      <pre style="font-size:0.38em;"><code class="language-javascript">drawGameOver() {  // 🔴 Red overlay
-  ctx.fillStyle = "rgba(0,0,0,0.7)"
-  ctx.fillRect(0, 0, w, h)
-  ctx.fillStyle = "#FF0000"
-  ctx.fillText("GAME OVER", cx, cy)
+      <h3>Key Methods</h3>
+      <pre style="font-size:0.34em;"><code class="language-javascript">// Dynamic margins based on obstacle size
+const margin = 80 + obs.size * 0.6
+const dangerZone = 260 + obs.size * 1.8
+
+// Speed-scaled distances (all scale with level)
+const emergencyDist = 120 + speed * 15  // L8→225px
+const lastResortRange = 40 + speed * 8  // L8→96px
+const passRange = 220 + speed * 20      // L8→360px
+const lookAhead = 160 + speed * 20      // L8→300px
+
+// Compensated predictions (multi-label)
+getObstaclePredictions() {
+  return this.predictions
+    .filter(p => ['clock','stop sign'].includes(p.label))
+    .map(p => { /* latency compensation */ })
 }
-drawYouWin() {    // 🏆 Gold overlay
-  ctx.fillStyle = "rgba(0,0,0,0.7)"
-  ctx.fillRect(0, 0, w, h)
-  ctx.fillStyle = "#FFD700"
-  ctx.fillText("YOU WIN", cx, cy)
-  ctx.fillText("Congratulations!", cx, cy+55)
-}
-youWin() { this.running = false; this.won = true }</code></pre>
+// revalidateFixedY() also calls releaseFixedY()
+revalidateFixedY()
+releaseFixedY()</code></pre>
     </div>
   </div>
   <div class="highlight-box">
-    <strong>AI loop:</strong> YOLO detects obstacles → Worker sends <code>predictionResult</code> →
-    <code>parseBBox</code> → <code>isInDangerZone</code> → <code>willCollideVertically</code> → <code>calcSafeY</code> → sets <code>fixedY</code>.
-    Margins are <strong>dynamic</strong>: <code>60 + obs.size * 0.5</code>. <code>releaseFixedY()</code> only frees when no obstacle within 150px.
-    After 80 obstacles (all 8 levels), golden <strong>"YOU WIN"</strong> appears!
+    <strong>Evasion.js</strong> is a dedicated class that receives a reference to Game.
+    All evasion logic uses <strong>only YOLO predictions</strong> (no direct obstacle access).
+    Margins are <strong>dynamic</strong>: <code>80 + obs.size * 0.6</code>. Distances <strong>scale with speed</strong> for high-level reactivity.
+    Non-obstacle labels (kite/airplane) are <strong>ignored without releasing fixedY</strong>.
+    <code>releaseFixedY()</code> only frees when no prediction within <code>220 + speed*20</code> px.
   </div>
 </section>
 
@@ -536,28 +556,37 @@ youWin() { this.running = false; this.won = true }</code></pre>
     <div>
       <pre><code class="language-javascript">class Obstacle {
   constructor(canvas) {
-    this.w = 50
-    this.h = Math.random() * 120 + 60
-    //     → random height: 60–180px
+    // Random square size 35-90px (meteor)
+    const size = Math.random() * 55 + 35
+    this.w = size
+    this.h = size  // square = round without distortion
 
-    this.x = canvas.width
-    //     → spawns at right edge
-
+    this.x = canvas.width  // spawn at right edge
     this.y = Math.random()
             * (canvas.height - this.h)
-            - 30
-    //     → random vertical position
 
     this.sprite = new Image()
-    this.sprite.src =
-      "./assets/obstacle.png"
+    this.sprite.src = "./assets/obstacle.png"
+
+    // Rotation animation
+    this.angle = Math.random() * Math.PI * 2
+    this.rotationSpeed = (Math.random()
+      * 0.04 + 0.02)
+      * (Math.random() < 0.5 ? 1 : -1)
   }
 
   update(speed) {
-    this.x -= speed  // Move left
+    this.x -= speed
+    this.angle += this.rotationSpeed
   }
 
-  draw(ctx) { /* drawImage(...) */ }
+  draw(ctx) {
+    ctx.save()
+    ctx.translate(cx, cy)  // center
+    ctx.rotate(this.angle)
+    ctx.drawImage(sprite, ...)
+    ctx.restore()
+  }
 }</code></pre>
     </div>
     <div>
@@ -565,12 +594,14 @@ youWin() { this.running = false; this.won = true }</code></pre>
       <ol>
         <li><strong>Spawn</strong> — Created at <code>x = canvas.width</code> (right edge)</li>
         <li><strong>Move</strong> — Each frame: <code>x -= speed</code></li>
+        <li><strong>Rotate</strong> — Each frame: <code>angle += rotationSpeed</code></li>
         <li><strong>Collide?</strong> — Checked by <code>collide(player, obstacle)</code></li>
         <li><strong>Off-screen</strong> — When <code>x + w &lt; 0</code> → removed, score++</li>
       </ol>
       <div class="highlight-box">
-        <strong>Design choice:</strong> Player stays at fixed X. Obstacles move left,
-        creating the illusion of forward movement (classic side-scroller).
+        <strong>Design choice:</strong> Obstacles are <strong>square</strong> (35–90px) with random rotation,
+        simulating spinning meteors. <code>save/translate/rotate/restore</code> draws the sprite
+        rotated around its center.
       </div>
     </div>
   </div>
@@ -906,19 +937,21 @@ async function loadModelYOLOv5AndItsLabels() {
   const output = await _model.executeAsync(tensor)     // 1. Run model
   tf.dispose(tensor)                                   // 2. Free input
 
-  const [boxes, scores, classes] = output.slice(0, 3)  // 3. Extract outputs
+  const [boxes, scores, classes, validDetections] = output.slice(0, 4)
 
-  const [boxesData, scoresData, classesData] =         // 4. GPU → CPU
-    await Promise.all([boxes.data(), scores.data(), classes.data()])
+  const [boxesData, scoresData, classesData, validData] = // 4. GPU → CPU
+    await Promise.all([boxes.data(), scores.data(), classes.data(), validDetections.data()])
 
   output.forEach(t => t.dispose())                     // 5. Free outputs
-  return { boxes: boxesData, scores: scoresData, classes: classesData }
+  return { boxes: boxesData, scores: scoresData, classes: classesData,
+           numDetections: validData[0] }
 }</code></pre>
   <div class="warn-box">
     <strong>Model outputs (YOLOv5):</strong>
     <strong>boxes</strong> [x1,y1,x2,y2] ·
     <strong>scores</strong> confidence 0–1 ·
-    <strong>classes</strong> integer index → labels.json
+    <strong>classes</strong> integer index → labels.json ·
+    <strong>numDetections</strong> valid count (avoids iterating garbage slots)
   </div>
 </section>
 
@@ -928,12 +961,19 @@ async function loadModelYOLOv5AndItsLabels() {
 <section>
   <h2>🧠 GameWorker.js — Processing Predictions</h2>
   <pre style="font-size:0.40em;"><code class="language-javascript">// Generator function — yields predictions one at a time
-function* processPrediction({ boxes, scores, classes }, width, height) {
-  for (let index = 0; index < scores.length; index++) {
-    if (scores[index] < CLASS_THRESHOLD) continue  // Filter low confidence
-
+function* processPrediction({ boxes, scores, classes, numDetections }, width, height) {
+  const limit = numDetections ?? scores.length
+  for (let index = 0; index < limit; index++) {
+    if (scores[index] < CLASS_THRESHOLD) continue       // Filter low confidence
     const label = _labels[classes[index]]
-    console.log(`[Worker] Detection: ${label} (confidence: ${scores[index].toFixed(2)})`)
+    if (!['airplane', 'clock', 'stop sign', 'kite'].includes(label.toLowerCase())) continue
+
+    let [x1, y1, x2, y2] = boxes.slice(index * 4, (index + 1) * 4)
+    x1 *= width; x2 *= width; y1 *= height; y2 *= height // Normalize to pixels
+
+    yield { label, confidence: scores[index],
+            bbox: [x1, y1, x2, y2],
+            center: [(x1+x2)/2, (y1+y2)/2] }
   }
 }</code></pre>
   <div class="two-col">
@@ -947,8 +987,8 @@ function* processPrediction({ boxes, scores, classes }, width, height) {
     </div>
     <div>
       <div class="warn-box">
-        <strong>CLASS_THRESHOLD = 0.5</strong><br>
-        Only detections with confidence ≥ 50% are kept.
+        <strong>CLASS_THRESHOLD = 0.4</strong><br>
+        Only detections with confidence ≥ 40% are kept.
         This filters out noise and false positives.
         In production, you'd tune this based on precision/recall requirements.
       </div>
@@ -965,23 +1005,31 @@ function* processPrediction({ boxes, scores, classes }, width, height) {
 
 self.onmessage = async (e) => {
   const { type } = e.data
-  if (type === 'predict') {
-    if (!_model) return
-    const input = createAndFormatImageTensor(e.data.image)
-    const { width, height } = e.data.image
+  if (type === 'predict') return handlePredictEvent(e)
+}
+
+async function handlePredictEvent(e) {
+  if (!_model) return
+  const image = e.data.image
+  const { width, height } = image
+  const input = createAndFormatImageTensor(image)
+  image.close()  // Free native ImageBitmap memory
+  try {
     const results = await runYoloModelOverTensorAndGetDetections(input)
     for (const prediction of processPrediction(results, width, height))
-      postMessage({ type: 'prediction', ...prediction })
-  }
-  if (type === 'gameState') {
-    // TODO: Use state (player pos, obstacles) to decide action
+      postMessage({ type: 'predictionResult', ...prediction, sentAt: e.data.sentAt })
+  } catch (err) {
+    tf.dispose(input)
+    console.error('[Worker] Prediction error:', err)
   }
 }
+
 loadModelYOLOv5AndItsLabels()</code></pre>
   <div class="highlight-box">
-    <strong>Two input channels:</strong>
-    <code>predict</code> = visual (image frame) ·
-    <code>gameState</code> = numerical (positions, score)
+    <strong>Key improvements:</strong>
+    <code>image.close()</code> frees native bitmap memory.
+    <code>sentAt</code> timestamp enables latency compensation in Evasion.js.
+    <code>handlePredictEvent</code> isolates predict logic with proper error handling.
   </div>
 </section>
 
@@ -1069,7 +1117,8 @@ loadModelYOLOv5AndItsLabels()</code></pre>
   │                                                  │
   │  loop() ──▶ Game.update()                        │
   │               ├── Player.update()   (gravity)    │
-  │               ├── Obstacle.update() (move left)  │
+  │               ├── Obstacle.update() (move+spin)  │
+  │               ├── Evasion.js  (3-tier AI evade)  │
   │               ├── collide()         (AABB)       │
   │               └── LevelManager.update()          │
   │             Game.draw() → clearRect → entities   │
@@ -1080,9 +1129,9 @@ loadModelYOLOv5AndItsLabels()</code></pre>
   │    ├── fromPixels → resize → normalize           │
   │    ├── YOLOv5n inference                         │
   │    └── processPrediction → postMessage           │
-  │              └── { type:'action', action:'jump' }│
+  │         └── { type:'predictionResult', bbox, sentAt }│
   │                       ▼                          │
-  │              Game → player.jump()                │
+  │         Evasion.js → fixedY → player.y          │
   └──────────────────────────────────────────────────┘
     </pre>
   </div>
@@ -1104,7 +1153,8 @@ loadModelYOLOv5AndItsLabels()</code></pre>
           <li><strong>tf.tidy() + dispose()</strong> — GPU memory mgmt</li>
           <li><strong>Generator</strong> — lazy, memory-efficient</li>
           <li><strong>ES Modules</strong> — no build step</li>
-          <li><strong>Autonomous agent</strong> — YOLO detections drive AI evasion</li>
+          <li><strong>Evasion.js</strong> — dedicated class, 3-tier YOLO-only evasion</li>
+          <li><strong>Latency compensation</strong> — sentAt timestamp corrects predictions</li>
         </ul>
       </div>
     </div>
@@ -1112,10 +1162,9 @@ loadModelYOLOv5AndItsLabels()</code></pre>
       <div class="warn-box">
         <strong>🔮 Future opportunities</strong>
         <ul>
-          <li><strong>Fine-tune YOLOv5</strong> — retrain the model on actual game sprites so it recognizes "player" and "obstacle" instead of guessing "stop sign" or "surfboard"</li>
+          <li><strong>Fine-tune YOLOv5</strong> — retrain the model on actual game sprites so it recognizes "player" and "obstacle" instead of guessing "clock" or "kite"</li>
           <li><strong>OffscreenCanvas</strong> — render directly inside the Worker thread, eliminating main-thread canvas access entirely</li>
           <li><strong>Reinforcement Learning</strong> — replace hand-coded rules with a self-learning agent (Q-learning / NEAT) that improves by playing thousands of games</li>
-          <li><strong>Bounding box overlay</strong> — draw YOLO detection rectangles on the canvas in real time for visual debugging</li>
         </ul>
       </div>
     </div>
@@ -1123,38 +1172,40 @@ loadModelYOLOv5AndItsLabels()</code></pre>
 </section>
 
 <!-- ============================================================ -->
-<!-- SLIDE 33 — How The AI Could Play -->
+<!-- SLIDE 33 — How The AI Plays -->
 <!-- ============================================================ -->
 <section>
-  <h2>🤖 How Could The AI Actually Play?</h2>
-  <p>The Worker detects objects but doesn't decide actions yet. Two approaches:</p>
+  <h2>🤖 How The AI Plays</h2>
+  <p>The full AI pipeline is implemented and plays autonomously:</p>
   <div class="two-col">
     <div>
-      <h3>Approach 1: Rule-Based</h3>
-      <pre style="font-size:0.38em;"><code class="language-javascript">if (type === 'gameState') {
-  const { player, obstacles } = state
-  const nearest = obstacles
-    .filter(o => o.x > player.x)
-    .sort((a, b) => a.x - b.x)[0]
-  if (nearest) {
-    const gap = nearest.y + nearest.h / 2
-    if (player.y > gap + 20)
-      postMessage({ type:'action', action:'jump' })
-  }
-}</code></pre>
+      <h3>Vision Pipeline</h3>
+      <pre style="font-size:0.38em;"><code class="language-javascript">// Every 200ms:
+// 1. Canvas → ImageBitmap → Worker
+// 2. Worker runs YOLOv5n inference
+// 3. Detections filtered (clock/kite/...)
+// 4. postMessage({type:'predictionResult',
+//    bbox, sentAt}) back to main thread
+// 5. Evasion.js compensates latency:
+//    obs.x -= speed * 60 * elapsed</code></pre>
     </div>
     <div>
-      <h3>Approach 2: Vision-Based</h3>
-      <pre style="font-size:0.38em;"><code class="language-javascript">// Using YOLO detections:
-// 1. Find player bounding box
-// 2. Find nearest obstacle box
-// 3. Compare Y positions → jump?
+      <h3>3-Tier Evasion</h3>
+      <pre style="font-size:0.38em;"><code class="language-javascript">// Tier 1: makeAirplaneMoveAwayObstacles()
+//   Filters 'clock'/'stop sign' labels
+//   Non-obstacle labels → ignored (no release)
+//   → calcSafeY → set fixedY
 
-// Hybrid: gameState (fast) +
-// YOLO (visual confirmation)</code></pre>
+// Tier 2: emergencyEvade()
+//   Speed-scaled: 120 + speed*15 px
+//   L8 (speed 7): 225px reaction range
+
+// Tier 3: lastResortEvade()
+//   Speed-scaled: 40 + speed*8 px
+//   L8 (speed 7): 96px last-chance range</code></pre>
       <div class="highlight-box">
-        The <code>TODO</code> in the codebase is exactly this decision logic.
-        The infrastructure is already in place!
+        All 3 tiers use <strong>only YOLO predictions</strong> via <code>getObstaclePredictions()</code>.
+        All distances <strong>scale with speed</strong> for high-level reactivity.
       </div>
     </div>
   </div>
@@ -1213,9 +1264,10 @@ loadModelYOLOv5AndItsLabels()</code></pre>
   <div style="text-align: left; max-width: 800px; margin: 0 auto;">
     <div class="green-box">
       <ul>
-        <li><strong>6 game classes</strong> — clean separation of concerns (Game, Player, Obstacle, Collision, Input, LevelManager)</li>
+        <li><strong>7 game classes</strong> — clean separation of concerns (Game, Player, Obstacle, Collision, Input, LevelManager, Evasion)</li>
         <li><strong>1 Web Worker</strong> — runs YOLOv5n inference in a separate thread</li>
-        <li><strong>Full AI pipeline</strong> — image capture → tensor preprocessing → inference → detection filtering</li>
+        <li><strong>Full AI pipeline</strong> — image capture → tensor preprocessing → inference → detection filtering → 3-tier evasion</li>
+        <li><strong>YOLO-only evasion</strong> — AI uses only YOLO predictions with latency compensation, no direct obstacle access</li>
         <li><strong>Zero backend</strong> — everything runs client-side in the browser</li>
         <li><strong>Production patterns</strong> — transferable objects, GPU memory management, generator functions</li>
       </ul>
