@@ -97,9 +97,9 @@ export default class Game {
           snapshotTime: e.data.sentAt || performance.now(), // tempo real do snapshot
           timestamp: performance.now()
         })
-        // Remove predições antigas (> 1000ms) para não acumular
+        // Remove predições antigas (> 2000ms) para não acumular
         const now = performance.now()
-        this.predictions = this.predictions.filter(p => now - p.timestamp < 1000)
+        this.predictions = this.predictions.filter(p => now - p.timestamp < 2000)
         //Fim desenho na tela
 
         //Metodo que faz a IA jogar sozinha usando as predições do modelo YOLO para detectar os obstáculos e mover o player para evitar colidir com eles

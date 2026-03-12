@@ -16,40 +16,40 @@
     .reveal h1 { font-size: 2.2em; }
     .reveal h2 { font-size: 1.6em; }
     .reveal h3 { font-size: 1.2em; color: #8b949e; }
-    .reveal pre { font-size: 0.44em; margin: 4px 0; }
+    .reveal pre { font-size: 0.42em; margin: 3px 0; }
     .reveal code { font-size: 0.88em; }
     .reveal section { text-align: left; overflow: hidden; }
     .reveal .center { text-align: center; }
-    .reveal ul { font-size: 0.75em; line-height: 1.3; margin: 3px 0; }
-    .reveal ol { font-size: 0.75em; line-height: 1.3; margin: 3px 0; }
-    .reveal p { font-size: 0.75em; line-height: 1.25; margin: 3px 0; }
-    .reveal h2 + p, .reveal h2 + pre, .reveal h2 + ul, .reveal h2 + ol { margin-top: 6px; }
+    .reveal ul { font-size: 0.72em; line-height: 1.2; margin: 2px 0; }
+    .reveal ol { font-size: 0.72em; line-height: 1.2; margin: 2px 0; }
+    .reveal p { font-size: 0.72em; line-height: 1.15; margin: 2px 0; }
+    .reveal h2 + p, .reveal h2 + pre, .reveal h2 + ul, .reveal h2 + ol { margin-top: 4px; }
     .reveal .small { font-size: 0.65em; color: #8b949e; }
     .reveal .highlight-box {
       background: rgba(88,166,255,0.1);
       border-left: 4px solid #58a6ff;
-      padding: 6px 12px;
-      margin: 6px 0;
+      padding: 4px 10px;
+      margin: 4px 0;
       border-radius: 4px;
       font-size: 0.72em;
     }
     .reveal .warn-box {
       background: rgba(255,166,87,0.1);
       border-left: 4px solid #ffa657;
-      padding: 6px 12px;
-      margin: 6px 0;
+      padding: 4px 10px;
+      margin: 4px 0;
       border-radius: 4px;
       font-size: 0.72em;
     }
     .reveal .green-box {
       background: rgba(63,185,80,0.1);
       border-left: 4px solid #3fb950;
-      padding: 6px 12px;
-      margin: 6px 0;
+      padding: 4px 10px;
+      margin: 4px 0;
       border-radius: 4px;
       font-size: 0.72em;
     }
-    .reveal table { font-size: 0.65em; margin: 6px auto; }
+    .reveal table { font-size: 0.62em; margin: 4px auto; }
     .reveal table th { background: rgba(88,166,255,0.15); color: #58a6ff; }
     .reveal table td, .reveal table th { padding: 4px 10px; border: 1px solid #30363d; }
     .two-col { display: flex; gap: 20px; align-items: flex-start; }
@@ -287,24 +287,16 @@ loop()</code></pre>
     <div>
       <h3 style="margin-bottom:2px;">Constructor</h3>
       <pre style="font-size:0.38em; margin-top:2px;"><code class="language-javascript">constructor(canvas, ctx, worker) {
-  this.canvas = canvas
-  this.ctx = ctx
+  this.canvas = canvas; this.ctx = ctx
   this.worker = worker
-  this.bg = new Image()
-  this.bg.src = "./assets/bg.png"
   this.player = new Player()
-  this.obstacles = []
-  this.frame = 0
-  this.score = 0
-  this.running = true
-  this.won = false
+  this.obstacles = []; this.frame = 0
+  this.score = 0; this.running = true
   this.levelManager = new LevelManager()
-  this.predictions = []      // YOLO bounding boxes
-  this.fixedY = null         // AI evasion lock
-  this.levelAnnounce = null  // Level-up display
-  this.levelColors = ['#00FF88', '#00BFFF', ...]
+  this.predictions = []    // YOLO bboxes
+  this.fixedY = null       // AI evasion lock
   new Input(this.player)
-  this.evasion = new Evasion(this) // AI evasion
+  this.evasion = new Evasion(this)
   this.setupWorker()
 }</code></pre>
     </div>
@@ -346,15 +338,12 @@ loop()</code></pre>
   <div class="two-col">
     <div>
       <div class="warn-box">
-        <strong>Why iterate backwards?</strong> <code>splice(i, 1)</code> shifts indices.
-        Iterating backwards (i--) prevents skipping elements.
+        <strong>Why iterate backwards?</strong> <code>splice(i, 1)</code> shifts indices — iterating backwards prevents skipping.
       </div>
     </div>
     <div>
       <div class="green-box">
-        <strong>3-tier evasion:</strong> <code>revalidateFixedY()</code> keeps lock safe,
-        <code>emergencyEvade()</code> reacts frame-by-frame, and
-        <code>lastResortEvade()</code> is the final safety net — all via YOLO predictions.
+        <strong>3-tier evasion:</strong> <code>revalidateFixedY</code> → <code>emergencyEvade</code> → <code>lastResortEvade</code> — all via YOLO predictions.
       </div>
     </div>
   </div>
@@ -385,7 +374,7 @@ loop()</code></pre>
 }</code></pre>
   <div class="highlight-box">
     <strong>Canvas 2D</strong> is immediate-mode — nothing retained between frames.
-    Includes optional <strong>YOLO bbox overlay</strong> (commented out), <strong>level-up announcements</strong> with colored fade-out, and <strong>win/lose screens</strong>.
+    Includes optional <strong>YOLO bbox overlay</strong>, <strong>level-up announcements</strong> and <strong>win/lose screens</strong>.
   </div>
 </section>
 
@@ -415,10 +404,6 @@ loop()</code></pre>
     this.worker.postMessage({ type: 'predict', image: bitmap, sentAt }, [bitmap])
   }, 200)
 }</code></pre>
-    const bitmap = await createImageBitmap(this.canvas)
-    this.worker.postMessage({ type: 'predict', image: bitmap }, [bitmap])
-  }, 200)
-}</code></pre>
   <div class="two-col">
     <div>
       <div class="green-box">
@@ -442,57 +427,46 @@ loop()</code></pre>
   <h2>🤖 Evasion.js — AI Evasion (Dedicated Class)</h2>
   <div class="two-col">
     <div>
-      <h3>3-Tier Evasion System (YOLO-only)</h3>
-      <pre style="font-size:0.34em;"><code class="language-javascript">// Tier 1: YOLO prediction triggers evasion
-makeAirplaneMoveAwayObstacles(prediction) {
-  if (!['clock','stop sign'].includes(prediction.label))
-    return  // Player labels (kite/airplane) → ignore, don't release
-  const obs = this.parseBBox(prediction.bbox)
-  // Compensate latency since snapshot was taken
+      <h3>3-Tier Evasion (YOLO-only)</h3>
+      <pre style="font-size:0.34em;"><code class="language-javascript">// Tier 1: YOLO prediction → evasion
+makeAirplaneMoveAwayObstacles(pred) {
+  if (!['clock','stop sign'].includes(pred.label))
+    return  // Player labels → ignore
+  const obs = this.parseBBox(pred.bbox)
   const elapsed = (performance.now() - snapshotTime) / 1000
-  obs.x1 -= speed * 60 * elapsed
-  if (!this.isInDangerZone(obs) || !this.willCollideVertically(obs)) {
-    this.releaseFixedY(); return
-  }
-  let safeY = this.calcSafeY(obs)
-  if (!this.isPositionSafeFromPredictions(safeY))
-    safeY = this.findSafeYFromPredictions()
-  this.fixedY = safeY
+  obs.x1 -= speed * 60 * elapsed  // latency comp.
+  if (!this.isInDangerZone(obs)) { this.releaseFixedY(); return }
+  this.fixedY = this.calcSafeY(obs)
 }
-// Tier 2: Emergency (speed-scaled: 120 + speed*15 px)
-emergencyEvade() { /* e.g. speed 7 → 225px range */ }
-// Tier 3: Last resort (speed-scaled: 40 + speed*8 px)
-lastResortEvade() { /* iterates getObstaclePredictions() */ }</code></pre>
+// Tier 2: Emergency (120 + speed*15 px)
+emergencyEvade() { /* speed 7 → 225px */ }
+// Tier 3: Last resort (40 + speed*8 px)
+lastResortEvade() { /* getObstaclePredictions() */ }</code></pre>
     </div>
     <div>
-      <h3>Key Methods</h3>
-      <pre style="font-size:0.34em;"><code class="language-javascript">// Dynamic margins based on obstacle size
-const margin = 80 + obs.size * 0.6
-const dangerZone = 260 + obs.size * 1.8
+      <h3>Key Constants</h3>
+      <pre style="font-size:0.34em;"><code class="language-javascript">// Dynamic margins (obstacle size)
+margin = 80 + obs.size * 0.6
+dangerZone = 260 + obs.size * 1.8
 
-// Speed-scaled distances (all scale with level)
-const emergencyDist = 120 + speed * 15  // L8→225px
-const lastResortRange = 40 + speed * 8  // L8→96px
-const passRange = 220 + speed * 20      // L8→360px
-const lookAhead = 160 + speed * 20      // L8→300px
+// Speed-scaled distances
+emergencyDist  = 120 + speed * 15 // L8→225px
+lastResortRange = 40 + speed * 8  // L8→96px
+passRange      = 220 + speed * 20 // L8→360px
 
-// Compensated predictions (multi-label)
+// Compensated predictions
 getObstaclePredictions() {
   return this.predictions
-    .filter(p => ['clock','stop sign'].includes(p.label))
-    .map(p => { /* latency compensation */ })
-}
-// revalidateFixedY() also calls releaseFixedY()
-revalidateFixedY()
-releaseFixedY()</code></pre>
+    .filter(p => ['clock','stop sign']
+      .includes(p.label))
+    .map(p => { /* latency comp. */ })
+}</code></pre>
     </div>
   </div>
   <div class="highlight-box">
-    <strong>Evasion.js</strong> is a dedicated class that receives a reference to Game.
-    All evasion logic uses <strong>only YOLO predictions</strong> (no direct obstacle access).
-    Margins are <strong>dynamic</strong>: <code>80 + obs.size * 0.6</code>. Distances <strong>scale with speed</strong> for high-level reactivity.
-    Non-obstacle labels (kite/airplane) are <strong>ignored without releasing fixedY</strong>.
-    <code>releaseFixedY()</code> only frees when no prediction within <code>220 + speed*20</code> px.
+    <strong>Evasion.js</strong>: dedicated class, <strong>only YOLO predictions</strong> (no direct obstacle access).
+    Margins <strong>dynamic</strong> (<code>80 + obs.size * 0.6</code>), distances <strong>scale with speed</strong>.
+    Non-obstacle labels <strong>ignored without releasing fixedY</strong>.
   </div>
 </section>
 
@@ -582,8 +556,7 @@ releaseFixedY()</code></pre>
 
   draw(ctx) {
     ctx.save()
-    ctx.translate(cx, cy)  // center
-    ctx.rotate(this.angle)
+    ctx.translate(cx, cy); ctx.rotate(this.angle)
     ctx.drawImage(sprite, ...)
     ctx.restore()
   }
@@ -592,16 +565,15 @@ releaseFixedY()</code></pre>
     <div>
       <h3>Obstacle Lifecycle</h3>
       <ol>
-        <li><strong>Spawn</strong> — Created at <code>x = canvas.width</code> (right edge)</li>
-        <li><strong>Move</strong> — Each frame: <code>x -= speed</code></li>
-        <li><strong>Rotate</strong> — Each frame: <code>angle += rotationSpeed</code></li>
-        <li><strong>Collide?</strong> — Checked by <code>collide(player, obstacle)</code></li>
-        <li><strong>Off-screen</strong> — When <code>x + w &lt; 0</code> → removed, score++</li>
+        <li><strong>Spawn</strong> at <code>x = canvas.width</code> (right edge)</li>
+        <li><strong>Move</strong> each frame: <code>x -= speed</code></li>
+        <li><strong>Rotate</strong> each frame: <code>angle += rotationSpeed</code></li>
+        <li><strong>Collide?</strong> via <code>collide(player, obstacle)</code></li>
+        <li><strong>Off-screen</strong> → removed, score++</li>
       </ol>
       <div class="highlight-box">
-        <strong>Design choice:</strong> Obstacles are <strong>square</strong> (35–90px) with random rotation,
-        simulating spinning meteors. <code>save/translate/rotate/restore</code> draws the sprite
-        rotated around its center.
+        Obstacles are <strong>square</strong> (35–90px) with random rotation (spinning meteors).
+        <code>save/translate/rotate/restore</code> draws rotated around center.
       </div>
     </div>
   </div>
@@ -743,10 +715,9 @@ releaseFixedY()</code></pre>
 <section>
   <h2>🔍 What is YOLO? — History</h2>
   <ul>
-    <li><strong>2015</strong> — YOLOv1 by Joseph Redmon: <em>"You Only Look Once"</em></li>
-    <li><strong>2016-2020</strong> — v2, v3 by Redmon; v4 by Bochkovskiy et al.</li>
-    <li><strong>2021</strong> — <strong>YOLOv5</strong> by Ultralytics (Glenn Jocher). First YOLO in PyTorch.</li>
-    <li><strong>2023-2025</strong> — YOLOv8, v9, v10, v11 by various teams</li>
+    <li><strong>2015</strong> — YOLOv1 by J. Redmon: <em>"You Only Look Once"</em></li>
+    <li><strong>2016-2021</strong> — v2–v4 (Redmon, Bochkovskiy); <strong>v5</strong> by Ultralytics (PyTorch)</li>
+    <li><strong>2023-2025</strong> — YOLOv8–v11 by various teams</li>
   </ul>
   <div class="highlight-box" style="margin:4px 0;">
     Unlike R-CNN (multi-pass), YOLO processes the entire image in a <strong>single forward pass</strong>.
@@ -1111,7 +1082,7 @@ loadModelYOLOv5AndItsLabels()</code></pre>
 <section>
   <h2>🔄 Complete Data Flow</h2>
   <div class="architecture-diagram">
-    <pre style="color:#c9d1d9; font-size:0.75em; line-height:1.4;">
+    <pre style="color:#c9d1d9; font-size:0.65em; line-height:1.3;">
   ┌────────────────── MAIN THREAD ──────────────────┐
   │  Keyboard ──▶ Input.js ──▶ Player.jump()        │
   │                                                  │
@@ -1162,9 +1133,9 @@ loadModelYOLOv5AndItsLabels()</code></pre>
       <div class="warn-box">
         <strong>🔮 Future opportunities</strong>
         <ul>
-          <li><strong>Fine-tune YOLOv5</strong> — retrain the model on actual game sprites so it recognizes "player" and "obstacle" instead of guessing "clock" or "kite"</li>
-          <li><strong>OffscreenCanvas</strong> — render directly inside the Worker thread, eliminating main-thread canvas access entirely</li>
-          <li><strong>Reinforcement Learning</strong> — replace hand-coded rules with a self-learning agent (Q-learning / NEAT) that improves by playing thousands of games</li>
+          <li><strong>Fine-tune YOLOv5</strong> — retrain on game sprites for accurate labels</li>
+          <li><strong>OffscreenCanvas</strong> — render inside Worker, no main-thread canvas</li>
+          <li><strong>Reinforcement Learning</strong> — self-learning agent (Q-learning / NEAT)</li>
         </ul>
       </div>
     </div>
@@ -1176,7 +1147,6 @@ loadModelYOLOv5AndItsLabels()</code></pre>
 <!-- ============================================================ -->
 <section>
   <h2>🤖 How The AI Plays</h2>
-  <p>The full AI pipeline is implemented and plays autonomously:</p>
   <div class="two-col">
     <div>
       <h3>Vision Pipeline</h3>
@@ -1184,28 +1154,22 @@ loadModelYOLOv5AndItsLabels()</code></pre>
 // 1. Canvas → ImageBitmap → Worker
 // 2. Worker runs YOLOv5n inference
 // 3. Detections filtered (clock/kite/...)
-// 4. postMessage({type:'predictionResult',
-//    bbox, sentAt}) back to main thread
+// 4. postMessage back to main thread
 // 5. Evasion.js compensates latency:
 //    obs.x -= speed * 60 * elapsed</code></pre>
     </div>
     <div>
       <h3>3-Tier Evasion</h3>
       <pre style="font-size:0.38em;"><code class="language-javascript">// Tier 1: makeAirplaneMoveAwayObstacles()
-//   Filters 'clock'/'stop sign' labels
-//   Non-obstacle labels → ignored (no release)
-//   → calcSafeY → set fixedY
+//   Filters 'clock'/'stop sign' → calcSafeY
 
 // Tier 2: emergencyEvade()
 //   Speed-scaled: 120 + speed*15 px
-//   L8 (speed 7): 225px reaction range
 
 // Tier 3: lastResortEvade()
-//   Speed-scaled: 40 + speed*8 px
-//   L8 (speed 7): 96px last-chance range</code></pre>
+//   Speed-scaled: 40 + speed*8 px</code></pre>
       <div class="highlight-box">
-        All 3 tiers use <strong>only YOLO predictions</strong> via <code>getObstaclePredictions()</code>.
-        All distances <strong>scale with speed</strong> for high-level reactivity.
+        All 3 tiers use <strong>only YOLO predictions</strong>. Distances <strong>scale with speed</strong>.
       </div>
     </div>
   </div>
@@ -1297,7 +1261,7 @@ loadModelYOLOv5AndItsLabels()</code></pre>
     slideNumber: true,
     width: 1200,
     height: 700,
-    margin: 0.06,
+    margin: 0.04,
     transition: 'slide',
     plugins: [RevealHighlight]
   });
